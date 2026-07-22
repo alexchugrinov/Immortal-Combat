@@ -50,3 +50,34 @@ test("jump uses a rising and falling arc and returns to the ground", () => {
   assert.equal(engine.fighters[0].y, 0);
   assert.equal(engine.fighters[0].state, "idle");
 });
+
+test("attack boxes exist only during active frames", () => {
+  const engine = new FightingEngine();
+  ready(engine);
+  engine.step({ ...empty, heavy: true }, empty);
+  assert.equal(engine.debugBoxes().filter((box) => box.kind === "hit").length, 0);
+  for (let frame = 0; frame < 10; frame++) engine.step(empty, empty);
+  assert.equal(engine.debugBoxes().filter((box) => box.kind === "hit").length, 1);
+  for (let frame = 0; frame < 6; frame++) engine.step(empty, empty);
+  assert.equal(engine.debugBoxes().filter((box) => box.kind === "hit").length, 0);
+});
+
+test("a low guard does not stop a high strike", () => {
+  const engine = new FightingEngine();
+  ready(engine);
+  engine.fighters[0].x = 560;
+  engine.fighters[1].x = 660;
+  engine.step({ ...empty, light: true }, { ...empty, block: true, down: true });
+  for (let frame = 0; frame < 9; frame++) engine.step(empty, { ...empty, block: true, down: true });
+  assert.equal(engine.fighters[1].health, 94);
+});
+
+test("fighters always turn to face one another", () => {
+  const engine = new FightingEngine();
+  ready(engine);
+  engine.fighters[0].x = 760;
+  engine.fighters[1].x = 520;
+  engine.step(empty, empty);
+  assert.equal(engine.fighters[0].facing, -1);
+  assert.equal(engine.fighters[1].facing, 1);
+});

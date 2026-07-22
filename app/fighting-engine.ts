@@ -20,15 +20,18 @@ export type CombatSnapshot = {
 
 type Move = {
   startup: number; active: number; recovery: number; damage: number; chip: number;
-  reach: number; hitstun: number; blockstun: number; push: number; meter: number; high?: boolean;
+  reach: number; hitstun: number; blockstun: number; push: number; meter: number;
+  level: "high" | "mid"; hitBottom: number; hitHeight: number;
 };
 
 export const MOVES: Record<CombatAction, Move> = {
-  light: { startup: 5, active: 3, recovery: 11, damage: 6, chip: 0, reach: 116, hitstun: 13, blockstun: 7, push: 18, meter: 8, high: true },
-  heavy: { startup: 10, active: 4, recovery: 18, damage: 13, chip: 1, reach: 138, hitstun: 21, blockstun: 12, push: 31, meter: 13, high: true },
-  kick: { startup: 8, active: 5, recovery: 17, damage: 10, chip: 1, reach: 154, hitstun: 17, blockstun: 10, push: 25, meter: 10 },
-  special: { startup: 17, active: 7, recovery: 28, damage: 19, chip: 3, reach: 265, hitstun: 28, blockstun: 16, push: 48, meter: 0 },
+  light: { startup: 5, active: 3, recovery: 11, damage: 6, chip: 0, reach: 116, hitstun: 13, blockstun: 7, push: 18, meter: 8, level: "high", hitBottom: 96, hitHeight: 58 },
+  heavy: { startup: 10, active: 4, recovery: 18, damage: 13, chip: 1, reach: 138, hitstun: 21, blockstun: 12, push: 31, meter: 13, level: "high", hitBottom: 88, hitHeight: 76 },
+  kick: { startup: 8, active: 5, recovery: 17, damage: 10, chip: 1, reach: 154, hitstun: 17, blockstun: 10, push: 25, meter: 10, level: "mid", hitBottom: 42, hitHeight: 90 },
+  special: { startup: 17, active: 7, recovery: 28, damage: 19, chip: 3, reach: 265, hitstun: 28, blockstun: 16, push: 48, meter: 0, level: "mid", hitBottom: 24, hitHeight: 142 },
 };
+
+export type CombatBox = { kind: "hurt" | "hit" | "guard"; side: 0 | 1; x: number; y: number; width: number; height: number };
 
 const EMPTY_INPUT: InputFrame = { left: false, right: false, down: false, jump: false, block: false, light: false, heavy: false, kick: false, special: false };
 const actionKeys: CombatAction[] = ["special", "kick", "heavy", "light"];
@@ -165,12 +168,15 @@ export class FightingEngine {
     if (attacker.stateFrame < move.startup || attacker.stateFrame >= move.startup + move.active) return;
     const target = this.fighters[side === 0 ? 1 : 0];
     const inFront = (target.x - attacker.x) * attacker.facing > 0;
-    const distance = Math.abs(target.x - attacker.x);
-    const ducked = move.high && target.state === "crouch";
-    const airborneMiss = target.y > 105 && action !== "special";
-    if (!inFront || distance > move.reach || ducked || airborneMiss) return;
+    const attackLeft = attacker.facing === 1 ? attacker.x + 34 : attacker.x - move.reach;
+    const targetHeight = target.state === "crouch" ? 86 : 168;
+    const targetLeft = target.x - 38;
+    const horizontalHit = attackLeft < targetLeft + 76 && attackLeft + move.reach - 34 > targetLeft;
+    const verticalHit = move.hitBottom < target.y + targetHeight && move.hitBottom + move.hitHeight > target.y;
+    if (!inFront || !horizontalHit || !verticalHit) return;
     attacker.moveConnected = true;
-    const blocked = defenderInput.block && target.hitstun === 0 && !attackStates.has(target.state);
+    const guardMatches = move.level === "mid" || !defenderInput.down;
+    const blocked = defenderInput.block && guardMatches && target.hitstun === 0 && !attackStates.has(target.state);
     const damage = blocked ? move.chip : move.damage;
     target.health = Math.max(0, target.health - damage);
     target.vx = attacker.facing * move.push * (blocked ? .55 : 1);
@@ -184,5 +190,22 @@ export class FightingEngine {
 
   snapshot(): CombatSnapshot {
     return { fighters: this.fighters, timer: Math.max(0, Math.ceil(this.remainingFrames / 60)), phase: this.winner !== null ? "ko" : this.readyFrames > 0 ? "ready" : "fight", winner: this.winner, frame: this.frame, hit: this.hitEvent };
+  }
+
+  debugBoxes(): CombatBox[] {
+    const boxes: CombatBox[] = [];
+    for (const side of [0, 1] as const) {
+      const fighter = this.fighters[side];
+      const height = fighter.state === "crouch" ? 86 : 168;
+      boxes.push({ kind: "hurt", side, x: fighter.x - 38, y: fighter.y, width: 76, height });
+      if (fighter.state === "block" || fighter.state === "blockstun") boxes.push({ kind: "guard", side, x: fighter.x - 44, y: fighter.y + 30, width: 88, height: fighter.state === "crouch" ? 60 : 132 });
+      if (attackStates.has(fighter.state)) {
+        const move = MOVES[fighter.state as CombatAction];
+        if (fighter.stateFrame >= move.startup && fighter.stateFrame < move.startup + move.active) {
+          boxes.push({ kind: "hit", side, x: fighter.facing === 1 ? fighter.x + 34 : fighter.x - move.reach, y: move.hitBottom, width: move.reach - 34, height: move.hitHeight });
+        }
+      }
+    }
+    return boxes;
   }
 }

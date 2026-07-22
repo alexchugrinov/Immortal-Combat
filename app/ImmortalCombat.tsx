@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PhaserArena } from "./PhaserArena";
 import type { CombatSnapshot } from "./fighting-engine";
 
@@ -29,6 +29,7 @@ export type Stage = {
   place: string;
   sky: string;
   accent: string;
+  image: string;
 };
 
 const fighters: Fighter[] = [
@@ -44,9 +45,9 @@ const fighters: Fighter[] = [
 const storyFighters = fighters.filter((fighter) => !fighter.exclusive);
 
 const stages: Stage[] = [
-  { id: "neon", name: "NEON ROOFTOP", place: "New Muscat · Midnight", sky: "#251643", accent: "#ef3b89" },
-  { id: "temple", name: "TEMPLE OF DAWN", place: "Mountain Shrine · Sunrise", sky: "#733c3b", accent: "#ffb85c" },
-  { id: "oasis", name: "FORGOTTEN OASIS", place: "Empty Quarter · Dusk", sky: "#724835", accent: "#68d6ba" },
+  { id: "neon", name: "NEON ROOFTOP", place: "New Muscat · Midnight", sky: "#251643", accent: "#ef3b89", image: "stage-neon.png" },
+  { id: "temple", name: "TEMPLE OF DAWN", place: "Mountain Shrine · Sunrise", sky: "#733c3b", accent: "#ffb85c", image: "stage-temple.png" },
+  { id: "oasis", name: "FORGOTTEN OASIS", place: "Empty Quarter · Dusk", sky: "#724835", accent: "#68d6ba", image: "stage-oasis.png" },
 ];
 
 const getFighter = (id: string) => fighters.find((fighter) => fighter.id === id) ?? fighters[0];
@@ -152,7 +153,7 @@ export function ImmortalCombat() {
         </button>
         <div className="top-actions">
           <div className="currency"><span className="oh-coin">OH</span><strong>{coins.toLocaleString()}</strong></div>
-          <button className="icon-button" onClick={() => setSoundOn((value) => !value)} aria-label="Toggle sound">{soundOn ? "♪" : "×"}</button>
+          <button className="icon-button" onClick={() => setSoundOn((value) => !value)} aria-label={soundOn ? "Mute combat sound" : "Enable combat sound"} aria-pressed={soundOn}>{soundOn ? "♪" : "×"}</button>
         </div>
       </header>}
 
@@ -164,7 +165,7 @@ export function ImmortalCombat() {
       )}
       {screen === "shop" && <ShopScreen coins={coins} unlocked={unlocked} redeemed={redeemed.length} onBuy={buy} onRedeem={redeemCode} onBack={() => setScreen("home")} />}
       {screen === "fight" && (
-        <FightScreen key={`${mode}-${level}-${p1Id}-${p2Id}-${stageId}`} mode={mode} gamepads={gamepads} level={level} p1={getFighter(p1Id)} p2={getFighter(p2Id)} stage={stages.find((stage) => stage.id === stageId) ?? stages[0]}
+        <FightScreen key={`${mode}-${level}-${p1Id}-${p2Id}-${stageId}`} mode={mode} gamepads={gamepads} soundOn={soundOn} level={level} p1={getFighter(p1Id)} p2={getFighter(p2Id)} stage={stages.find((stage) => stage.id === stageId) ?? stages[0]}
           onExit={() => setScreen("home")}
           onRematch={() => setScreen("select")}
           onStoryWin={(reward) => { setCoins((value) => value + reward); setUnlocked((list) => list.includes(p2Id) ? list : [...list, p2Id]); setLevel((value) => value + 1); setP2Id(storyFighters[((level + 1) % storyFighters.length)].id); setScreen("select"); flash(`+${reward} OH · ${getFighter(p2Id).name} joined your crew`); }} />
@@ -227,15 +228,15 @@ function SelectScreen(props: { mode: Mode; gamepads: ConnectedPad[]; unlocked: s
       <PanelHeading eyebrow={props.mode === "story" ? "STORY MODE" : "LOCAL VERSUS"} title={step === "fighter" ? "CHOOSE YOUR FIGHTERS" : step === "stage" ? "CHOOSE THE ARENA" : "READY YOUR CONTROLS"} onBack={props.onBack} />
       {step === "fighter" ? <>
         <div className="versus-preview">
-          <button className={`selected-slot ${activeSlot === 0 ? "active" : ""}`} onClick={() => setActiveSlot(0)}><SelectedFighter fighter={p1} label="PLAYER 1" align="left" /></button>
+          <button className={`selected-slot ${activeSlot === 0 ? "active" : ""}`} aria-pressed={activeSlot === 0} onClick={() => setActiveSlot(0)}><SelectedFighter fighter={p1} label="PLAYER 1" align="left" /></button>
           <div className="versus-mark"><span>ROUND</span><b>VS</b><small>{props.mode === "story" ? "LEVEL UP" : "NO MERCY"}</small></div>
-          <button className={`selected-slot ${activeSlot === 1 ? "active" : ""}`} onClick={() => props.mode === "versus" && setActiveSlot(1)}><SelectedFighter fighter={p2} label={props.mode === "story" ? "RIVAL" : "PLAYER 2"} align="right" /></button>
+          <button className={`selected-slot ${activeSlot === 1 ? "active" : ""}`} aria-pressed={activeSlot === 1} disabled={props.mode === "story"} onClick={() => setActiveSlot(1)}><SelectedFighter fighter={p2} label={props.mode === "story" ? "RIVAL" : "PLAYER 2"} align="right" /></button>
         </div>
         <div className="roster" aria-label="Fighter roster">
           {fighters.map((fighter) => {
             const locked = !props.unlocked.includes(fighter.id);
             const selected = props.p1Id === fighter.id || props.p2Id === fighter.id;
-            return <button key={fighter.id} className={`roster-card ${selected ? "selected" : ""} ${locked ? "locked" : ""}`} style={{"--fighter": fighter.color} as React.CSSProperties}
+            return <button key={fighter.id} className={`roster-card ${selected ? "selected" : ""} ${locked ? "locked" : ""}`} aria-pressed={selected} style={{"--fighter": fighter.color} as React.CSSProperties}
               onClick={() => { if (locked) return props.onShop(); if (activeSlot === 0) props.onP1(fighter.id); else if (props.mode === "versus") props.onP2(fighter.id); }}>
               <CharacterPortrait fighter={fighter} locked={locked} /><strong>{fighter.name}</strong><small>{locked ? (fighter.exclusive ? "SECRET CODE" : `${fighter.price} OH`) : fighter.element}</small>
             </button>;
@@ -245,8 +246,8 @@ function SelectScreen(props: { mode: Mode; gamepads: ConnectedPad[]; unlocked: s
         <button className="cta-button" onClick={() => setStep("stage")}>CHOOSE ARENA <span>→</span></button>
       </> : step === "stage" ? <>
         <div className="stage-grid">
-          {stages.map((stage) => <button key={stage.id} className={`stage-card ${props.stageId === stage.id ? "active" : ""}`} onClick={() => props.onStage(stage.id)} style={{"--sky": stage.sky, "--accent": stage.accent} as React.CSSProperties}>
-            <div className="stage-mini has-art" style={{backgroundImage: `linear-gradient(color-mix(in srgb, ${stage.sky} 24%, transparent), #05060a42), url('${publicBase}game/neon-rooftop-arena.png')`}}><span className="mini-moon"/><i/><i/><i/><b/></div><small>{stage.place}</small><h3>{stage.name}</h3><span className="selected-label">{props.stageId === stage.id ? "SELECTED" : "SELECT"}</span>
+          {stages.map((stage) => <button key={stage.id} className={`stage-card ${props.stageId === stage.id ? "active" : ""}`} aria-pressed={props.stageId === stage.id} onClick={() => props.onStage(stage.id)} style={{"--sky": stage.sky, "--accent": stage.accent} as React.CSSProperties}>
+            <div className="stage-mini has-art" style={{backgroundImage: `linear-gradient(color-mix(in srgb, ${stage.sky} 24%, transparent), #05060a42), url('${publicBase}game/${stage.image}')`}}><span className="mini-moon"/><i/><i/><i/><b/></div><small>{stage.place}</small><h3>{stage.name}</h3><span className="selected-label">{props.stageId === stage.id ? "SELECTED" : "SELECT"}</span>
           </button>)}
         </div>
         <div className="stage-actions"><button className="text-button" onClick={() => setStep("fighter")}>← FIGHTERS</button><button className="cta-button fight-cta" onClick={() => setStep("controls")}>SET CONTROLS <span>→</span></button></div>
@@ -313,37 +314,69 @@ function ShopScreen({ coins, unlocked, redeemed, onBuy, onRedeem, onBack }: { co
   );
 }
 
-function FightScreen({ mode, gamepads, level, p1, p2, stage, onExit, onRematch, onStoryWin }: { mode: Mode; gamepads: ConnectedPad[]; level: number; p1: Fighter; p2: Fighter; stage: Stage; onExit: () => void; onRematch: () => void; onStoryWin: (reward: number) => void }) {
-  const [snapshot, setSnapshot] = useState<CombatSnapshot>({
+const freshCombatSnapshot = (): CombatSnapshot => ({
     fighters: [
       { x: 370, y: 0, vx: 0, vy: 0, facing: 1, health: 100, meter: 35, state: "idle", stateFrame: 0, hitstun: 0, blockstun: 0, moveConnected: false },
       { x: 910, y: 0, vx: 0, vy: 0, facing: -1, health: 100, meter: 35, state: "idle", stateFrame: 0, hitstun: 0, blockstun: 0, moveConnected: false },
     ],
     timer: 60, phase: "ready", winner: null, frame: 0, hit: null,
-  });
+});
+
+function FightScreen({ mode, gamepads, soundOn, level, p1, p2, stage, onExit, onRematch, onStoryWin }: { mode: Mode; gamepads: ConnectedPad[]; soundOn: boolean; level: number; p1: Fighter; p2: Fighter; stage: Stage; onExit: () => void; onRematch: () => void; onStoryWin: (reward: number) => void }) {
+  const [snapshot, setSnapshot] = useState<CombatSnapshot>(freshCombatSnapshot);
   const [paused, setPaused] = useState(false);
+  const [arenaReady, setArenaReady] = useState(false);
+  const [round, setRound] = useState(1);
+  const [wins, setWins] = useState<[number, number]>([0, 0]);
+  const [roundWinner, setRoundWinner] = useState<0 | 1 | null>(null);
+  const [matchWinner, setMatchWinner] = useState<0 | 1 | null>(null);
+  const resolvedRound = useRef(0);
+  const winsRef = useRef<[number, number]>([0, 0]);
   const reward = 70 + level * 20;
-  const winner = snapshot.winner;
+
+  useEffect(() => {
+    if (snapshot.winner === null || resolvedRound.current === round) return;
+    resolvedRound.current = round;
+    const winner = snapshot.winner;
+    const nextWins: [number, number] = [...winsRef.current];
+    nextWins[winner] += 1;
+    winsRef.current = nextWins;
+    setWins(nextWins);
+    setRoundWinner(winner);
+    if (nextWins[winner] >= 2) {
+      setMatchWinner(winner);
+      return;
+    }
+    const nextRound = window.setTimeout(() => {
+      setArenaReady(false);
+      setRound((value) => value + 1);
+      setRoundWinner(null);
+      setSnapshot(freshCombatSnapshot());
+    }, 1500);
+    return () => window.clearTimeout(nextRound);
+  }, [round, snapshot.winner]);
 
   return (
     <section className={`fight-screen phaser-fight ${snapshot.hit && snapshot.frame - snapshot.hit.frame < 8 ? "impact" : ""}`} style={{"--sky": stage.sky, "--stage-accent": stage.accent} as React.CSSProperties}>
-      <PhaserArena mode={mode} level={level} fighters={[p1, p2]} stage={stage} paused={paused} onSnapshot={setSnapshot} onPause={() => setPaused((value) => !value)} />
+      <PhaserArena key={round} mode={mode} level={level} fighters={[p1, p2]} stage={stage} soundOn={soundOn} paused={paused || roundWinner !== null} onSnapshot={setSnapshot} onPause={() => setPaused((value) => !value)} onReady={() => setArenaReady(true)} />
+      {!arenaReady && <div className="arena-loading" role="status"><span className="brand-mark">IC</span><strong>PREPARING {stage.name}</strong><i /></div>}
       <div className="cinema-bars" aria-hidden="true"><span/><span/></div>
       <div className="fight-hud">
-        <HealthBar fighter={p1} value={snapshot.fighters[0].health} meter={snapshot.fighters[0].meter} side="left" />
-        <div className="round-badge"><small>{mode === "story" ? `LEVEL ${level}` : "VERSUS"}</small><b>{String(snapshot.timer).padStart(2, "0")}</b><span>ROUND 1</span></div>
-        <HealthBar fighter={p2} value={snapshot.fighters[1].health} meter={snapshot.fighters[1].meter} side="right" />
+        <HealthBar fighter={p1} value={snapshot.fighters[0].health} meter={snapshot.fighters[0].meter} wins={wins[0]} side="left" />
+        <div className="round-badge"><small>{mode === "story" ? `LEVEL ${level}` : "VERSUS"}</small><b>{String(snapshot.timer).padStart(2, "0")}</b><span>ROUND {round} · BEST OF 3</span></div>
+        <HealthBar fighter={p2} value={snapshot.fighters[1].health} meter={snapshot.fighters[1].meter} wins={wins[1]} side="right" />
       </div>
       <div className="arena-label"><span>{stage.name}</span><small>{stage.place}</small></div>
       <button className="pause-button" onClick={() => setPaused(true)} aria-label="Pause combat">Ⅱ</button>
       {snapshot.phase === "ready" && <div className="fight-callout">READY</div>}
+      {roundWinner !== null && matchWinner === null && <div className="round-result"><small>ROUND {round}</small><strong>{roundWinner === 0 ? p1.name : p2.name} TAKES IT</strong></div>}
       {snapshot.hit && snapshot.frame - snapshot.hit.frame < 18 && <div className="combat-notice">{snapshot.hit.blocked ? "BLOCK" : snapshot.hit.action === "special" ? "ELEMENTAL HIT" : "HIT"}</div>}
       <div className="fight-controls">
         <FightControlLegend player="P1" controller={mode === "story" && gamepads.length > 0} />
         {mode === "versus" && <span className="controller-legend"><b>P2</b> <kbd>GAMEPAD</kbd> REQUIRED · <kbd>LS</kbd> MOVE · <kbd>A/✕</kbd> JUMP · <kbd>X/□</kbd> LIGHT · <kbd>Y/△</kbd> HEAVY</span>}
       </div>
       {paused && <div className="overlay"><div className="result-card pause-card"><small>COMBAT PAUSED</small><h2>CATCH YOUR BREATH</h2><button className="cta-button" onClick={() => setPaused(false)}>RESUME</button><button className="text-button" onClick={onExit}>EXIT TO MENU</button></div></div>}
-      {winner !== null && <div className="overlay"><div className="result-card"><span className="result-glyph">{winner === 0 && mode === "story" ? "盟" : "勝"}</span><small>{winner === 0 ? "VICTORY" : "DEFEAT"}</small><h2>{winner === 0 && mode === "story" ? "FRIENDSHIP FORGED" : `${winner === 0 ? p1.name : p2.name} WINS`}</h2><p>{winner === 0 && mode === "story" ? `${p2.name} respects your strength and joins your journey. The next rival will be even stronger.` : "A decisive battle in the Immortal arena."}</p>{winner === 0 && mode === "story" && <div className="reward"><span className="oh-coin">OH</span><b>+{reward}</b> VICTORY REWARD</div>}<button className="cta-button" onClick={() => winner === 0 && mode === "story" ? onStoryWin(reward) : onRematch()}>{winner === 0 && mode === "story" ? "NEXT LEVEL" : "REMATCH"} <span>→</span></button><button className="text-button" onClick={onExit}>BACK TO MENU</button></div></div>}
+      {matchWinner !== null && <div className="overlay"><div className="result-card"><span className="result-glyph">{matchWinner === 0 && mode === "story" ? "盟" : "勝"}</span><small>{matchWinner === 0 ? "VICTORY" : "DEFEAT"}</small><h2>{matchWinner === 0 && mode === "story" ? "FRIENDSHIP FORGED" : `${matchWinner === 0 ? p1.name : p2.name} WINS`}</h2><p>{matchWinner === 0 && mode === "story" ? `${p2.name} respects your strength and joins your journey. The next rival will be even stronger.` : `The match ends ${wins[0]}–${wins[1]} after a decisive best-of-three battle.`}</p>{matchWinner === 0 && mode === "story" && <div className="reward"><span className="oh-coin">OH</span><b>+{reward}</b> VICTORY REWARD</div>}<button className="cta-button" onClick={() => matchWinner === 0 && mode === "story" ? onStoryWin(reward) : onRematch()}>{matchWinner === 0 && mode === "story" ? "NEXT LEVEL" : "REMATCH"} <span>→</span></button><button className="text-button" onClick={onExit}>BACK TO MENU</button></div></div>}
     </section>
   );
 }
@@ -356,7 +389,7 @@ function CharacterPortrait({ fighter, locked = false }: { fighter: Fighter; lock
   return <span className={`character-portrait ${locked ? "portrait-locked" : ""}`} role="img" aria-label={`${fighter.name}, ${fighter.title}`} style={{ backgroundImage: `url('${publicBase}fighter-atlas.png')`, backgroundPosition: `${col * 33.333}% ${row * 100}%` }}><i>{locked ? "◇" : ""}</i></span>;
 }
 
-function HealthBar({ fighter, value, meter, side }: { fighter: Fighter; value: number; meter: number; side: "left" | "right" }) { return <div className={`health-block ${side}`}><div className="fighter-hud"><CharacterPortrait fighter={fighter}/><div><small>{side === "left" ? "PLAYER ONE" : "CHALLENGER"}</small><strong>{fighter.name}</strong></div></div><div className="health-track"><i style={{width: `${value}%`, background: fighter.color}}/></div><div className="power-track"><i style={{width: `${meter}%`, background: fighter.glow}}/></div></div>; }
+function HealthBar({ fighter, value, meter, wins, side }: { fighter: Fighter; value: number; meter: number; wins: number; side: "left" | "right" }) { return <div className={`health-block ${side} ${value <= 20 ? "danger" : ""}`}><div className="fighter-hud"><CharacterPortrait fighter={fighter}/><div><small>{side === "left" ? "PLAYER ONE" : "CHALLENGER"}</small><strong>{fighter.name}</strong><span className="round-pips" aria-label={`${wins} rounds won`}><i className={wins > 0 ? "won" : ""}/><i className={wins > 1 ? "won" : ""}/></span></div></div><div className="health-track"><i style={{width: `${value}%`, background: fighter.color}}/></div><div className="power-track"><i style={{width: `${meter}%`, background: fighter.glow}}/></div></div>; }
 
 function SelectedFighter({ fighter, label, align }: { fighter: Fighter; label: string; align: "left" | "right" }) { return <div className={`selected-fighter ${align}`} style={{"--fighter": fighter.color, "--glow": fighter.glow} as React.CSSProperties}><div className="selected-body"><CharacterPortrait fighter={fighter}/></div><div className="selected-copy"><small>{label} · {fighter.element}</small><h2>{fighter.name}</h2><p>{fighter.title}</p><span>{fighter.power}</span></div></div>; }
 

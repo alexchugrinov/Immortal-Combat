@@ -1,6 +1,6 @@
 # Immortal Combat
 
-A browser-based elemental fighting game with story progression, local versus, unlockable fighters, OH currency, secret reward codes, and a Phaser-powered frame-based combat engine.
+A browser-based elemental fighting prototype with story progression, local versus, unlockable fighters, OH currency, secret reward codes, and a Phaser-powered frame-based combat engine.
 
 ## Play
 
@@ -32,7 +32,7 @@ Story mode uses a conventional keyboard layout. Local versus uses keyboard plus 
 | Player 1 | `←` / `→` | `Space` | `↓` | `D` | `F` | `G` | `H` | `R` |
 | Player 2 | Controller stick | `A` / `✕` | Stick down | `LB` / `L1` | `X` / `□` | `Y` / `△` | `RT` / `R2` | `B` / `○` |
 
-Combat runs at a fixed 60 Hz simulation rate with buffered input, explicit startup/active/recovery frames, pushboxes, hurtboxes, attack ranges, hit-stop, hit-stun, block-stun, chip damage, knockback, crouch evasion, power-meter requirements, and deterministic story AI.
+Combat runs at a fixed 60 Hz simulation rate with buffered input, explicit startup/active/recovery frames, pushboxes, hurtboxes, per-frame attack boxes, hit-stop, hit-stun, block-stun, chip damage, knockback, crouch evasion, power-meter requirements, best-of-three rounds, and deterministic story AI. Press the backtick key during combat to display the hit/hurt/guard-box training overlay.
 
 ## Local development
 
@@ -61,4 +61,4 @@ In the repository, open **Settings → Pages** and set **Source** to **GitHub Ac
 
 React, TypeScript, Phaser, Tailwind CSS, Vite, and vinext.
 
-The armored fighter animation set is by comphonia and distributed under CC0. Its source notice is included beside the sprite assets in `public/game/knight`.
+The production artwork is stored as normalized atlases: 4×2 portrait cells, 5×2 transparent combat-pose cells, and consistent 16:9 stage canvases. The interface preserves each source image's aspect ratio instead of stretching it to fit.

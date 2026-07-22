@@ -14,16 +14,16 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Immortal Combat — Fight. Forgive. Unite.",
-  description: "A local keyboard fighting game where defeated rivals become powerful allies.",
+  description: "A cinematic browser fighting prototype where defeated rivals become powerful allies.",
   openGraph: {
     title: "Immortal Combat",
-    description: "Fight. Forgive. Unite. A local elemental fighting game.",
-    images: [{ url: "/og.png", width: 1731, height: 909, alt: "Immortal Combat — Fight. Forgive. Unite." }],
+    description: "Fight. Forgive. Unite. A cinematic elemental fighting prototype.",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Immortal Combat — Fight. Forgive. Unite." }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Immortal Combat",
-    description: "Fight. Forgive. Unite. A local elemental fighting game.",
+    description: "Fight. Forgive. Unite. A cinematic elemental fighting prototype.",
     images: ["/og.png"],
   },
   icons: {
