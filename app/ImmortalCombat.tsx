@@ -387,7 +387,7 @@ function ArenaBackground({ stage }: { stage: Stage }) { return <div className={`
 function CharacterPortrait({ fighter, locked = false }: { fighter: Fighter; locked?: boolean }) {
   const col = fighter.portraitIndex % 4;
   const row = Math.floor(fighter.portraitIndex / 4);
-  return <span className={`character-portrait ${locked ? "portrait-locked" : ""}`} role="img" aria-label={`${fighter.name}, ${fighter.title}`} style={{ backgroundPosition: `${col * 33.333}% ${row * 100}%` }}><i>{locked ? "◇" : ""}</i></span>;
+  return <span className={`character-portrait ${locked ? "portrait-locked" : ""}`} role="img" aria-label={`${fighter.name}, ${fighter.title}`} style={{ backgroundImage: `url('${import.meta.env.BASE_URL}fighter-atlas.png')`, backgroundPosition: `${col * 33.333}% ${row * 100}%` }}><i>{locked ? "◇" : ""}</i></span>;
 }
 
 function PowerEffect({ effect, from, to }: { effect: {side: 0 | 1; type: ElementName}; from: number; to: number }) { return <div className={`power-effect power-${effect.type}`} style={{left: `${from + (to - from) * .45}%`} as React.CSSProperties}><span>{effect.type === "lightning" ? "ϟ" : effect.type === "ice" ? "✦" : effect.type === "wind" ? "〰" : "●"}</span><i/><b/></div>; }
