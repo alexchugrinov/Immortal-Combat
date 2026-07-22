@@ -1,6 +1,6 @@
 # Immortal Combat
 
-A browser-based elemental fighting game with story progression, two-player local keyboard combat, unlockable fighters, OH currency, secret reward codes, and a WebGL 3D arena.
+A browser-based elemental fighting game with story progression, local versus, unlockable fighters, OH currency, secret reward codes, and a Phaser-powered frame-based combat engine.
 
 ## Play
 
@@ -10,31 +10,29 @@ A browser-based elemental fighting game with story progression, two-player local
 
 ## Controls
 
-The keyboard has a complete two-player layout. The game also detects browser-compatible gamepads automatically:
+Story mode uses a conventional keyboard layout. Local versus uses keyboard plus controller or two controllers, avoiding keyboard ghosting and cramped two-player bindings:
 
-- Story: controller 1 controls Player 1.
+- Story: arrows move, `Space` jumps, and the left hand controls defense and attacks. A connected controller also works.
 - Versus with two controllers: controller 1 controls Player 1 and controller 2 controls Player 2.
 - Versus with one controller: Player 1 uses the keyboard and Player 2 uses the controller.
-- Keyboard and controller inputs can be mixed during a match.
 
 | Controller input | Action |
 | --- | --- |
 | Left stick / D-pad | Move / crouch |
 | South (`A` / `✕`) | Jump |
 | Left bumper / trigger | Guard |
-| Right bumper | Dash toward rival |
 | Right trigger | Kick |
 | West (`X` / `□`) | Quick attack |
 | North (`Y` / `△`) | Heavy attack |
 | East (`B` / `○`) | Elemental power |
 | Menu / Options | Pause |
 
-| Player | Move | Jump | Crouch | Dash | Guard | Quick | Heavy | Kick | Power |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Player 1 | `A` / `D` | `W` | `S` | `Q` | `E` | `F` | `G` | `R` | `T` |
-| Player 2 | `←` / `→` | `↑` | `↓` | `U` | `I` | `J` | `K` | `O` | `L` |
+| Player | Move | Jump | Crouch | Block | Light | Heavy | Kick | Power |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Player 1 | `←` / `→` | `Space` | `↓` | `D` | `F` | `G` | `H` | `R` |
+| Player 2 | Controller stick | `A` / `✕` | Stick down | `LB` / `L1` | `X` / `□` | `Y` / `△` | `RT` / `R2` | `B` / `○` |
 
-Attacks have different startup, reach, damage, and recovery. Crouch under high punches, use kicks to catch crouching rivals, guard to reduce damage, dash into range, and spend 40 power for an elemental attack.
+Combat runs at a fixed 60 Hz simulation rate with buffered input, explicit startup/active/recovery frames, pushboxes, hurtboxes, attack ranges, hit-stop, hit-stun, block-stun, chip damage, knockback, crouch evasion, power-meter requirements, and deterministic story AI.
 
 ## Local development
 
@@ -61,6 +59,6 @@ In the repository, open **Settings → Pages** and set **Source** to **GitHub Ac
 
 ## Technology
 
-React, TypeScript, Three.js, Tailwind CSS, Vite, and vinext.
+React, TypeScript, Phaser, Tailwind CSS, Vite, and vinext.
 
-The rigged humanoid base characters and animation library are by [Quaternius](https://quaternius.com/) and distributed under CC0 1.0. The original license files are included beside the model assets in `public/models/quaternius`.
+The armored fighter animation set is by comphonia and distributed under CC0. Its source notice is included beside the sprite assets in `public/game/knight`.
