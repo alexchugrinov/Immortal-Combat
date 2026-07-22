@@ -27,6 +27,33 @@ test("combat atlases have an exact transparent 5x2 frame grid", async () => {
   }
 });
 
+test("starting fighters have a transparent eight-frame walk cycle", async () => {
+  const png = await readFile("public/game/raizen-nyra-walk.png");
+  assert.equal(png.readUInt32BE(16), 3072);
+  assert.equal(png.readUInt32BE(20), 1024);
+  assert.equal(png[25], 6, "walk atlas must be RGBA");
+  assert.equal(3072 / 8, 384, "walk frame width");
+  assert.equal(1024 / 2, 512, "walk frame height");
+});
+
+test("starting fighters have a transparent seven-frame punch cycle", async () => {
+  const png = await readFile("public/game/raizen-nyra-punch.png");
+  assert.equal(png.readUInt32BE(16), 2688);
+  assert.equal(png.readUInt32BE(20), 1024);
+  assert.equal(png[25], 6, "punch atlas must be RGBA");
+  assert.equal(2688 / 7, 384, "punch frame width");
+  assert.equal(1024 / 2, 512, "punch frame height");
+});
+
+test("starting fighters have a transparent eight-frame kick cycle", async () => {
+  const png = await readFile("public/game/raizen-nyra-kick.png");
+  assert.equal(png.readUInt32BE(16), 3072);
+  assert.equal(png.readUInt32BE(20), 1024);
+  assert.equal(png[25], 6, "kick atlas must be RGBA");
+  assert.equal(3072 / 8, 384, "kick frame width");
+  assert.equal(1024 / 2, 512, "kick frame height");
+});
+
 test("portrait atlas has exact 4x2 cells and is never stretched in CSS", async () => {
   const png = await readFile("public/fighter-atlas.png");
   const width = png.readUInt32BE(16);

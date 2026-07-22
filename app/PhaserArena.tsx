@@ -2,33 +2,28 @@
 
 import { useEffect, useRef } from "react";
 import type { Fighter, Stage } from "./ImmortalCombat";
-import { FightingEngine, MOVES, type CombatAction, type CombatSnapshot, type FighterState, type InputFrame } from "./fighting-engine";
+import { FightingEngine, MOVES, type CombatSnapshot, type InputFrame } from "./fighting-engine";
+import { sampleMotion } from "./combat-animation";
 
 type Props = {
   mode: "story" | "versus"; level: number; fighters: [Fighter, Fighter]; stage: Stage; soundOn: boolean; paused: boolean;
   onSnapshot: (snapshot: CombatSnapshot) => void; onPause: () => void; onReady: () => void;
 };
 
-const poseForState: Record<FighterState, 0 | 1 | 2 | 3 | 4> = {
-  idle: 0, walk: 1, crouch: 4, block: 4, jump: 0, light: 2, heavy: 2,
-  kick: 3, special: 2, hit: 0, blockstun: 4, ko: 0,
-};
-
-type CombatVisual = { texture: string; row: 0 | 5; scale: number; awakenedRow?: 0 | 5 };
+type CombatVisual = { texture: string; row: 0 | 5; scale: number; awakenedRow?: 0 | 5; walkRow?: 0 | 8; punchRow?: 0 | 7; kickRow?: 0 | 8 };
 
 const combatVisualFor = (fighter: Fighter): CombatVisual => {
   switch (fighter.id) {
-    case "nyra": return { texture: "combat-core", row: 5, scale: 1 };
+    case "nyra": return { texture: "combat-core", row: 5, walkRow: 8, punchRow: 7, kickRow: 8, scale: 1 };
     case "volt": return { texture: "combat-volt-kael", row: 0, scale: 1 };
     case "kael": return { texture: "combat-volt-kael", row: 5, scale: 1 };
     case "sahra": return { texture: "combat-sahra-aeri", row: 0, scale: 1 };
     case "aeri": return { texture: "combat-sahra-aeri", row: 5, scale: 1 };
     case "kage": return { texture: "combat-kage", row: 0, awakenedRow: 5, scale: 1 };
-    default: return { texture: "combat-core", row: 0, scale: 1 };
+    default: return { texture: "combat-core", row: 0, walkRow: 0, punchRow: 0, kickRow: 0, scale: 1 };
   }
 };
 
-const attackingStates = new Set<FighterState>(["light", "heavy", "kick", "special"]);
 const combatTextureFiles: Record<string, string> = {
   "combat-core": "fighters-combat-atlas.png",
   "combat-volt-kael": "fighters-volt-kael.png",
@@ -97,6 +92,15 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
           for (const texture of new Set(visuals.map((visual) => visual.texture))) {
             this.load.spritesheet(texture, `${base}game/${combatTextureFiles[texture]}`, { frameWidth: 384, frameHeight: 512, endFrame: 9 });
           }
+          if (visuals.some((visual) => visual.walkRow !== undefined)) {
+            this.load.spritesheet("combat-core-walk", `${base}game/raizen-nyra-walk.png`, { frameWidth: 384, frameHeight: 512, endFrame: 15 });
+          }
+          if (visuals.some((visual) => visual.punchRow !== undefined)) {
+            this.load.spritesheet("combat-core-punch", `${base}game/raizen-nyra-punch.png`, { frameWidth: 384, frameHeight: 512, endFrame: 13 });
+          }
+          if (visuals.some((visual) => visual.kickRow !== undefined)) {
+            this.load.spritesheet("combat-core-kick", `${base}game/raizen-nyra-kick.png`, { frameWidth: 384, frameHeight: 512, endFrame: 15 });
+          }
           this.load.image("arena-stage", `${base}game/${stage.image}`);
         }
         create() {
@@ -163,23 +167,17 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
             const sprite = sprites[side];
             const visual = visuals[side];
             const rowOffset = fighter.state === "special" && visual.awakenedRow !== undefined ? visual.awakenedRow : visual.row;
-            const basePose = poseForState[fighter.state];
-            let pose = fighter.state === "walk" && Math.floor(this.time.now / 105) % 2 === 0 ? 0 : basePose;
-            if (attackingStates.has(fighter.state)) {
-              const move = MOVES[fighter.state as CombatAction];
-              const showingStrike = fighter.stateFrame >= Math.max(1, move.startup - 2) && fighter.stateFrame < move.startup + move.active + 4;
-              pose = showingStrike ? basePose : 0;
-            }
+            const motion = sampleMotion(fighter.state, fighter.stateFrame, this.time.now, side as 0 | 1);
             const airborne = fighter.y > 1;
-            const breathe = fighter.state === "idle" ? Math.sin(this.time.now / 260 + side) * .008 : 0;
-            const crouch = fighter.state === "crouch" ? .84 : 1;
-            const hitTilt = fighter.state === "hit" ? (side ? -5 : 5) : 0;
-            const koTilt = fighter.state === "ko" ? (side ? 84 : -84) : hitTilt;
-            sprite.setFrame(rowOffset + pose)
-              .setPosition(fighter.x, 626 - fighter.y * 1.06 + (fighter.state === "walk" ? Math.sin(this.time.now / 85) * 4 : 0))
+            if (fighter.state === "kick" && visual.kickRow !== undefined) sprite.setTexture("combat-core-kick", visual.kickRow + motion.kickFrame);
+            else if ((fighter.state === "light" || fighter.state === "heavy" || fighter.state === "special") && visual.punchRow !== undefined) sprite.setTexture("combat-core-punch", visual.punchRow + motion.attackFrame);
+            else if (fighter.state === "walk" && visual.walkRow !== undefined) sprite.setTexture("combat-core-walk", visual.walkRow + motion.walkFrame);
+            else sprite.setTexture(visual.texture, rowOffset + motion.pose);
+            sprite
+              .setPosition(fighter.x + motion.x, 626 - fighter.y * 1.06 + motion.y)
               .setFlipX(fighter.facing === -1)
-              .setScale(visual.scale + breathe, (visual.scale + breathe) * crouch)
-              .setRotation(Phaser.Math.DegToRad(koTilt))
+              .setScale(visual.scale * motion.scaleX, visual.scale * motion.scaleY)
+              .setRotation(motion.rotation)
               .setAlpha(fighter.state === "ko" ? .78 : 1);
             if (fighter.state === "hit") sprite.setTint(0xff6b5e).setTintMode(Phaser.TintModes.FILL); else sprite.clearTint();
             shadows[side].setPosition(fighter.x, 622).setScale(airborne ? .62 : 1, airborne ? .72 : 1).setAlpha(airborne ? .32 : .68);

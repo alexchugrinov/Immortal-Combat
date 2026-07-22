@@ -176,22 +176,22 @@ export function ImmortalCombat() {
 }
 
 function HomeScreen({ onPlay, onStory, onShop }: { onPlay: () => void; onStory: () => void; onShop: () => void }) {
+  const publicBase = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? "/";
   return (
-    <section className="home-screen screen-enter">
-      <DynamicCity />
+    <section className="home-screen screen-enter" style={{ backgroundImage: `url('${publicBase}game/menu-hero-v2.png')` }}>
+      <HeroAtmosphere />
       <div className="hero-copy">
-        <p className="eyebrow"><span /> EVERY RIVAL CAN BECOME AN ALLY</p>
-        <h1>IMMORTAL<br/><em>COMBAT</em></h1>
+        <p className="eyebrow"><span /> FIGHT · FORGIVE · UNITE <span /></p>
+        <h1><span>IMMORTAL</span><em>COMBAT</em></h1>
         <p className="hero-sub">Strike hard. Show mercy. Build the strongest crew the realms have ever seen.</p>
         <div className="main-menu">
-          <button className="menu-button primary" onClick={onPlay}><span>01</span><strong>PLAY</strong><i>→</i></button>
-          <button className="menu-button" onClick={onStory}><span>02</span><strong>STORY MODE</strong><i>→</i></button>
-          <button className="menu-button" onClick={onShop}><span>03</span><strong>SHOP</strong><i>→</i></button>
+          <button className="menu-button primary" onClick={onPlay}><span>01</span><strong>ENTER COMBAT</strong><i>◆</i></button>
+          <button className="menu-button" onClick={onStory}><span>02</span><strong>STORY MODE</strong><i>◇</i></button>
+          <button className="menu-button" onClick={onShop}><span>03</span><strong>FIGHTER SHOP</strong><i>◇</i></button>
         </div>
       </div>
-      <div className="hero-fighter fighter-raizen" aria-hidden="true"><CharacterPortrait fighter={fighters[0]} /></div>
-      <div className="season-card"><small>SEASON 01</small><b>THE FIRST OATH</b><span>7 fighters · 3 arenas · frame-based combat</span></div>
-      <p className="home-hint">ARROWS TO MOVE · SPACE TO JUMP · F / G / H TO FIGHT</p>
+      <div className="season-card"><small>PROTOTYPE CHAPTER I</small><b>THE FIRST OATH</b><span>7 fighters · 3 arenas · best of three</span></div>
+      <p className="home-hint"><b>KEYBOARD</b> ARROWS MOVE · SPACE JUMP · F / G / H ATTACK · R POWER</p>
     </section>
   );
 }
@@ -380,7 +380,7 @@ function FightScreen({ mode, gamepads, soundOn, level, p1, p2, stage, onExit, on
     </section>
   );
 }
-function DynamicCity() { return <div className="dynamic-city" aria-hidden="true"><div className="moon"/><div className="cloud cloud-1"/><div className="cloud cloud-2"/><div className="skyline back">{Array.from({length: 14}, (_, i) => <i key={i}/>)}</div><div className="skyline front">{Array.from({length: 10}, (_, i) => <i key={i}/>)}</div><div className="temple-roof"/><div className="ember-field">{Array.from({length: 12}, (_, i) => <i key={i}/>)}</div></div>; }
+function HeroAtmosphere() { return <div className="hero-atmosphere" aria-hidden="true"><div className="ember-field">{Array.from({length: 12}, (_, i) => <i key={i}/>)}</div></div>; }
 
 function CharacterPortrait({ fighter, locked = false }: { fighter: Fighter; locked?: boolean }) {
   const col = fighter.portraitIndex % 4;
