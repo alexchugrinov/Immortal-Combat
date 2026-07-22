@@ -48,6 +48,7 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
     if (!mount) return;
     let destroyed = false;
     let game: import("phaser").Game | undefined;
+    let audioContext: AudioContext | null = null;
 
     const boot = async () => {
       const Phaser = (await import("phaser")).default;
@@ -68,11 +69,9 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
       let debugLabel: import("phaser").GameObjects.Text;
       let debugVisible = false;
       let gamepadPausePressed = false;
-      let audioContext: AudioContext | null = null;
-
       const wakeAudio = () => {
         if (!soundOn) return;
-        audioContext ??= new AudioContext();
+        audioContext ??= new window.AudioContext();
         if (audioContext.state === "suspended") void audioContext.resume();
       };
       const playImpact = (special: boolean, blocked: boolean) => {
