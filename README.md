@@ -10,10 +10,12 @@ A browser-based elemental fighting game with story progression, two-player local
 
 ## Controls
 
-| Player | Move | Jump | Block | Strike | Power |
-| --- | --- | --- | --- | --- | --- |
-| Player 1 | `A` / `D` | `W` | `S` | `F` | `G` |
-| Player 2 | `←` / `→` | `↑` | `↓` | `K` | `L` |
+| Player | Move | Jump | Guard | Quick | Heavy | Power |
+| --- | --- | --- | --- | --- | --- | --- |
+| Player 1 | `A` / `D` | `W` | `S` | `F` | `G` | `H` |
+| Player 2 | `←` / `→` | `↑` | `↓` | `J` | `K` | `L` |
+
+Attacks have different startup, reach, damage, and recovery. Chain hits for combos, guard to reduce damage, and spend 40 power for an elemental attack.
 
 ## Local development
 

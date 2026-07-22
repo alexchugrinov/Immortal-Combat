@@ -64,15 +64,18 @@ export function ImmortalCombat() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    try {
-      const savedCoins = localStorage.getItem("immortal-oh");
-      const savedFighters = localStorage.getItem("immortal-fighters");
-      const savedCodes = localStorage.getItem("immortal-codes");
-      if (savedCoins) setCoins(Number(savedCoins));
-      if (savedFighters) setUnlocked(JSON.parse(savedFighters));
-      if (savedCodes) setRedeemed(JSON.parse(savedCodes));
-    } catch { /* local progress is optional */ }
-    setHydrated(true);
+    const restore = window.setTimeout(() => {
+      try {
+        const savedCoins = localStorage.getItem("immortal-oh");
+        const savedFighters = localStorage.getItem("immortal-fighters");
+        const savedCodes = localStorage.getItem("immortal-codes");
+        if (savedCoins) setCoins(Number(savedCoins));
+        if (savedFighters) setUnlocked(JSON.parse(savedFighters));
+        if (savedCodes) setRedeemed(JSON.parse(savedCodes));
+      } catch { /* local progress is optional */ }
+      setHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(restore);
   }, []);
 
   useEffect(() => {
@@ -125,7 +128,7 @@ export function ImmortalCombat() {
   return (
     <main className="game-shell">
       <div className="grain" aria-hidden="true" />
-      <header className="topbar">
+      {screen !== "fight" && <header className="topbar">
         <button className="brand" onClick={() => setScreen("home")} aria-label="Immortal Combat home">
           <span className="brand-mark">IC</span>
           <span>IMMORTAL <b>COMBAT</b></span>
@@ -134,7 +137,7 @@ export function ImmortalCombat() {
           <div className="currency"><span className="oh-coin">OH</span><strong>{coins.toLocaleString()}</strong></div>
           <button className="icon-button" onClick={() => setSoundOn((value) => !value)} aria-label="Toggle sound">{soundOn ? "♪" : "×"}</button>
         </div>
-      </header>
+      </header>}
 
       {screen === "home" && <HomeScreen onPlay={() => setScreen("mode")} onStory={() => openSelect("story")} onShop={() => setScreen("shop")} />}
       {screen === "mode" && <ModeScreen onBack={() => setScreen("home")} onChoose={openSelect} />}
@@ -198,6 +201,7 @@ function ModeScreen({ onBack, onChoose }: { onBack: () => void; onChoose: (mode:
 
 function SelectScreen(props: { mode: Mode; unlocked: string[]; p1Id: string; p2Id: string; stageId: string; onP1: (id: string) => void; onP2: (id: string) => void; onStage: (id: string) => void; onBack: () => void; onShop: () => void; onFight: () => void }) {
   const [step, setStep] = useState<"fighter" | "stage">("fighter");
+  const [activeSlot, setActiveSlot] = useState<0 | 1>(0);
   const p1 = getFighter(props.p1Id);
   const p2 = getFighter(props.p2Id);
   return (
@@ -205,21 +209,21 @@ function SelectScreen(props: { mode: Mode; unlocked: string[]; p1Id: string; p2I
       <PanelHeading eyebrow={props.mode === "story" ? "STORY MODE" : "LOCAL VERSUS"} title={step === "fighter" ? "CHOOSE YOUR FIGHTERS" : "CHOOSE THE ARENA"} onBack={props.onBack} />
       {step === "fighter" ? <>
         <div className="versus-preview">
-          <SelectedFighter fighter={p1} label="PLAYER 1" align="left" />
+          <button className={`selected-slot ${activeSlot === 0 ? "active" : ""}`} onClick={() => setActiveSlot(0)}><SelectedFighter fighter={p1} label="PLAYER 1" align="left" /></button>
           <div className="versus-mark"><span>ROUND</span><b>VS</b><small>{props.mode === "story" ? "LEVEL UP" : "NO MERCY"}</small></div>
-          <SelectedFighter fighter={p2} label={props.mode === "story" ? "RIVAL" : "PLAYER 2"} align="right" />
+          <button className={`selected-slot ${activeSlot === 1 ? "active" : ""}`} onClick={() => props.mode === "versus" && setActiveSlot(1)}><SelectedFighter fighter={p2} label={props.mode === "story" ? "RIVAL" : "PLAYER 2"} align="right" /></button>
         </div>
         <div className="roster" aria-label="Fighter roster">
           {fighters.map((fighter) => {
             const locked = !props.unlocked.includes(fighter.id);
             const selected = props.p1Id === fighter.id || props.p2Id === fighter.id;
             return <button key={fighter.id} className={`roster-card ${selected ? "selected" : ""} ${locked ? "locked" : ""}`} style={{"--fighter": fighter.color} as React.CSSProperties}
-              onClick={() => { if (locked) return props.onShop(); if (props.p1Id !== fighter.id) props.onP1(fighter.id); else if (props.mode === "versus") props.onP2(fighter.id); }}>
+              onClick={() => { if (locked) return props.onShop(); if (activeSlot === 0) props.onP1(fighter.id); else if (props.mode === "versus") props.onP2(fighter.id); }}>
               <CharacterPortrait fighter={fighter} locked={locked} /><strong>{fighter.name}</strong><small>{locked ? (fighter.exclusive ? "SECRET CODE" : `${fighter.price} OH`) : fighter.element}</small>
             </button>;
           })}
         </div>
-        <p className="selection-help">Pick a card to change Player 1. Pick Player 1’s current card again to assign Player 2.</p>
+        <p className="selection-help">{props.mode === "story" ? "Choose your fighter. Your next story rival is assigned by the campaign." : `Selecting for ${activeSlot === 0 ? "Player 1" : "Player 2"}. Choose a portrait above to switch slots.`}</p>
         <button className="cta-button" onClick={() => setStep("stage")}>CHOOSE ARENA <span>→</span></button>
       </> : <>
         <div className="stage-grid">
@@ -260,103 +264,212 @@ function ShopScreen({ coins, unlocked, redeemed, onBuy, onRedeem, onBack }: { co
   );
 }
 
+type CombatMove = "jab" | "heavy" | "kick" | "power";
+
 function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin }: { mode: Mode; level: number; p1: Fighter; p2: Fighter; stage: Stage; onExit: () => void; onRematch: () => void; onStoryWin: (reward: number) => void }) {
   const [health, setHealth] = useState<[number, number]>([100, 100]);
-  const [meter, setMeter] = useState<[number, number]>([40, 40]);
-  const [positions, setPositions] = useState<[number, number]>([20, 72]);
+  const [meter, setMeter] = useState<[number, number]>([35, 35]);
+  const [positions, setPositions] = useState<[number, number]>([28, 72]);
   const [jumping, setJumping] = useState<[boolean, boolean]>([false, false]);
   const [blocking, setBlocking] = useState<[boolean, boolean]>([false, false]);
   const [effect, setEffect] = useState<{ side: 0 | 1; type: ElementName } | null>(null);
   const [hitSide, setHitSide] = useState<0 | 1 | null>(null);
-  const [roundText, setRoundText] = useState("FIGHT");
+  const [roundText, setRoundText] = useState("ROUND 1");
   const [winner, setWinner] = useState<0 | 1 | null>(null);
   const [paused, setPaused] = useState(false);
-  const [action, setAction] = useState<{ side: 0 | 1; kind: "strike" | "power"; stamp: number } | null>(null);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [combo, setCombo] = useState<{ side: 0 | 1; count: number } | null>(null);
+  const [combatNotice, setCombatNotice] = useState("");
+  const [action, setAction] = useState<{ side: 0 | 1; kind: CombatMove; stamp: number; combo: number } | null>(null);
   const cooldown = useRef<[number, number]>([0, 0]);
-  const healthRef = useRef(health);
+  const comboRef = useRef<[{ count: number; expires: number }, { count: number; expires: number }]>([{ count: 0, expires: 0 }, { count: 0, expires: 0 }]);
+  const heldKeys = useRef(new Set<string>());
   const positionsRef = useRef(positions);
   const blockingRef = useRef(blocking);
-  useEffect(() => { healthRef.current = health; }, [health]);
+  const healthRef = useRef(health);
+  const meterRef = useRef(meter);
+  const winnerRef = useRef(winner);
+  const pausedRef = useRef(paused);
+  const started = roundText === "";
   useEffect(() => { positionsRef.current = positions; }, [positions]);
   useEffect(() => { blockingRef.current = blocking; }, [blocking]);
+  useEffect(() => { healthRef.current = health; }, [health]);
+  useEffect(() => { meterRef.current = meter; }, [meter]);
+  useEffect(() => { winnerRef.current = winner; }, [winner]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
-  useEffect(() => { const timer = window.setTimeout(() => setRoundText(""), 1100); return () => window.clearTimeout(timer); }, []);
+  useEffect(() => {
+    const first = window.setTimeout(() => setRoundText("FIGHT"), 800);
+    const second = window.setTimeout(() => setRoundText(""), 1550);
+    return () => { window.clearTimeout(first); window.clearTimeout(second); };
+  }, []);
 
-  const damage = useCallback((attacker: 0 | 1, amount: number, special = false) => {
-    if (winner !== null || paused) return;
-    const target = attacker === 0 ? 1 : 0;
-    const distance = Math.abs(positionsRef.current[0] - positionsRef.current[1]);
-    if (!special && distance > 18) return;
-    const dealt = blockingRef.current[target] ? Math.ceil(amount * .3) : amount;
-    setHitSide(target);
-    window.setTimeout(() => setHitSide(null), 180);
-    setHealth((current) => {
-      const next: [number, number] = [...current];
-      next[target] = Math.max(0, next[target] - dealt);
-      if (next[target] === 0) window.setTimeout(() => setWinner(attacker), 120);
-      return next;
-    });
-    setMeter((current) => { const next: [number, number] = [...current]; next[attacker] = Math.min(100, next[attacker] + 12); return next; });
-  }, [paused, winner]);
+  const finish = useCallback((side: 0 | 1) => {
+    if (winnerRef.current !== null) return;
+    winnerRef.current = side;
+    setWinner(side);
+    setRoundText("K.O.");
+    window.setTimeout(() => setRoundText(""), 1200);
+  }, []);
 
-  const attack = useCallback((side: 0 | 1, special = false) => {
-    const now = Date.now();
-    if (now < cooldown.current[side] || winner !== null) return;
-    if (special) {
-      if (meter[side] < 40) return;
-      setMeter((current) => { const next: [number, number] = [...current]; next[side] -= 40; return next; });
-      setEffect({ side, type: side === 0 ? p1.element : p2.element });
-      setAction({ side, kind: "power", stamp: now });
-      cooldown.current[side] = now + 900;
-      window.setTimeout(() => { damage(side, 18, true); setEffect(null); }, 360);
-    } else {
-      cooldown.current[side] = now + 380;
-      setAction({ side, kind: "strike", stamp: now });
-      damage(side, 9 + (mode === "story" && side === 1 ? Math.min(7, level) : 0));
-    }
-  }, [damage, level, meter, mode, p1.element, p2.element, winner]);
+  useEffect(() => {
+    if (!started || paused || winner !== null) return;
+    const timer = window.setInterval(() => setTimeLeft((value) => {
+      if (value > 1) return value - 1;
+      const [left, right] = healthRef.current;
+      window.setTimeout(() => finish(left >= right ? 0 : 1), 0);
+      return 0;
+    }), 1000);
+    return () => window.clearInterval(timer);
+  }, [finish, paused, started, winner]);
 
   const move = useCallback((side: 0 | 1, delta: number) => {
+    if (pausedRef.current || winnerRef.current !== null) return;
     setPositions((current) => {
       const next: [number, number] = [...current];
-      next[side] = Math.max(7, Math.min(88, next[side] + delta));
+      const other = side === 0 ? 1 : 0;
+      next[side] = Math.max(10, Math.min(90, next[side] + delta));
+      if (Math.abs(next[side] - next[other]) < 7) next[side] = current[side];
       return next;
     });
   }, []);
 
   const jump = useCallback((side: 0 | 1) => {
+    if (jumping[side] || pausedRef.current || winnerRef.current !== null) return;
     setJumping((current) => { const next: [boolean, boolean] = [...current]; next[side] = true; return next; });
-    window.setTimeout(() => setJumping((current) => { const next: [boolean, boolean] = [...current]; next[side] = false; return next; }), 520);
-  }, []);
+    window.setTimeout(() => setJumping((current) => { const next: [boolean, boolean] = [...current]; next[side] = false; return next; }), 650);
+  }, [jumping]);
+
+  const landHit = useCallback((attacker: 0 | 1, baseDamage: number, reach: number, projectile = false) => {
+    if (winnerRef.current !== null || pausedRef.current) return;
+    const target = attacker === 0 ? 1 : 0;
+    const distance = Math.abs(positionsRef.current[0] - positionsRef.current[1]);
+    if (!projectile && distance > reach) {
+      comboRef.current[attacker] = { count: 0, expires: 0 };
+      setCombatNotice("WHIFF");
+      window.setTimeout(() => setCombatNotice(""), 260);
+      return;
+    }
+    const guarded = blockingRef.current[target];
+    const storyBonus = mode === "story" && attacker === 1 ? Math.min(4, Math.floor(level / 2)) : 0;
+    const dealt = guarded ? Math.max(1, Math.ceil((baseDamage + storyBonus) * .18)) : baseDamage + storyBonus;
+    const now = Date.now();
+    const chain = comboRef.current[attacker];
+    chain.count = now < chain.expires ? Math.min(9, chain.count + 1) : 1;
+    chain.expires = now + 900;
+    setCombo({ side: attacker, count: chain.count });
+    window.setTimeout(() => { if (Date.now() >= comboRef.current[attacker].expires) setCombo(null); }, 920);
+    setCombatNotice(guarded ? "GUARD" : projectile ? "ELEMENTAL HIT" : chain.count >= 3 ? "CHAIN" : "CLEAN HIT");
+    window.setTimeout(() => setCombatNotice(""), 360);
+    setHitSide(target);
+    window.setTimeout(() => setHitSide(null), guarded ? 100 : 230);
+    if (!guarded) move(target, attacker === 0 ? 2.4 : -2.4);
+    setHealth((current) => {
+      const next: [number, number] = [...current];
+      next[target] = Math.max(0, next[target] - dealt);
+      if (next[target] === 0) window.setTimeout(() => finish(attacker), 120);
+      return next;
+    });
+    setMeter((current) => {
+      const next: [number, number] = [...current];
+      next[attacker] = Math.min(100, next[attacker] + (projectile ? 4 : 10));
+      next[target] = Math.min(100, next[target] + (guarded ? 3 : 7));
+      return next;
+    });
+  }, [finish, level, mode, move]);
+
+  const attack = useCallback((side: 0 | 1, kind: CombatMove = "jab") => {
+    const now = Date.now();
+    if (now < cooldown.current[side] || winnerRef.current !== null || pausedRef.current || roundText !== "") return;
+    const moveData: Record<CombatMove, { damage: number; reach: number; startup: number; recovery: number }> = {
+      jab: { damage: 6, reach: 14, startup: 95, recovery: 250 },
+      heavy: { damage: 11, reach: 16, startup: 230, recovery: 540 },
+      kick: { damage: 9, reach: 18, startup: 170, recovery: 430 },
+      power: { damage: 19, reach: 100, startup: 420, recovery: 980 },
+    };
+    const data = moveData[kind];
+    if (kind === "power") {
+      if (meterRef.current[side] < 40) {
+        setCombatNotice("NEED 40 POWER");
+        window.setTimeout(() => setCombatNotice(""), 500);
+        return;
+      }
+      setMeter((current) => { const next: [number, number] = [...current]; next[side] -= 40; return next; });
+      setEffect({ side, type: side === 0 ? p1.element : p2.element });
+      window.setTimeout(() => setEffect(null), 720);
+    }
+    cooldown.current[side] = now + data.recovery;
+    const chain = comboRef.current[side].count;
+    setAction({ side, kind, stamp: now, combo: chain });
+    window.setTimeout(() => landHit(side, data.damage, data.reach, kind === "power"), data.startup);
+  }, [landHit, p1.element, p2.element, roundText]);
+
+  useEffect(() => {
+    let frame = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(2, (now - last) / 16.67); last = now;
+      if (!pausedRef.current && winnerRef.current === null && roundText === "") {
+        if (heldKeys.current.has("a")) move(0, -0.58 * dt);
+        if (heldKeys.current.has("d")) move(0, 0.58 * dt);
+        if (mode === "versus") {
+          if (heldKeys.current.has("arrowleft")) move(1, -0.58 * dt);
+          if (heldKeys.current.has("arrowright")) move(1, 0.58 * dt);
+        }
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [mode, move, roundText]);
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(event.key)) event.preventDefault();
       const key = event.key.toLowerCase();
-      if (key === "escape") return setPaused((value) => !value);
-      if (paused || winner !== null) return;
-      if (key === "a") move(0, -4); if (key === "d") move(0, 4); if (key === "w") jump(0); if (key === "s") setBlocking((v) => [true, v[1]]);
-      if (key === "f") attack(0); if (key === "g") attack(0, true);
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) event.preventDefault();
+      if (key === "escape") { setPaused((value) => !value); return; }
+      heldKeys.current.add(key);
+      if (event.repeat || pausedRef.current || winnerRef.current !== null) return;
+      if (key === "w") jump(0);
+      if (key === "s") setBlocking((value) => [true, value[1]]);
+      if (key === "f") attack(0, "jab");
+      if (key === "g") attack(0, "heavy");
+      if (key === "h") attack(0, "power");
       if (mode === "versus") {
-        if (key === "arrowleft") move(1, -4); if (key === "arrowright") move(1, 4); if (key === "arrowup") jump(1); if (key === "arrowdown") setBlocking((v) => [v[0], true]);
-        if (key === "k") attack(1); if (key === "l") attack(1, true);
+        if (key === "arrowup") jump(1);
+        if (key === "arrowdown") setBlocking((value) => [value[0], true]);
+        if (key === "j") attack(1, "jab");
+        if (key === "k") attack(1, "heavy");
+        if (key === "l") attack(1, "power");
       }
     };
-    const up = (event: KeyboardEvent) => { const key = event.key.toLowerCase(); if (key === "s") setBlocking((v) => [false, v[1]]); if (key === "arrowdown") setBlocking((v) => [v[0], false]); };
-    window.addEventListener("keydown", down); window.addEventListener("keyup", up);
-    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
-  }, [attack, jump, mode, move, paused, winner]);
+    const up = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase(); heldKeys.current.delete(key);
+      if (key === "s") setBlocking((value) => [false, value[1]]);
+      if (key === "arrowdown") setBlocking((value) => [value[0], false]);
+    };
+    const blur = () => { heldKeys.current.clear(); setBlocking([false, false]); };
+    window.addEventListener("keydown", down); window.addEventListener("keyup", up); window.addEventListener("blur", blur);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); window.removeEventListener("blur", blur); };
+  }, [attack, jump, mode]);
 
   useEffect(() => {
-    if (mode !== "story" || paused || winner !== null) return;
+    if (mode !== "story" || paused || winner !== null || !started) return;
     const ai = window.setInterval(() => {
       const [one, two] = positionsRef.current;
       const distance = Math.abs(one - two);
-      if (distance > 13) move(1, two > one ? -(2.5 + level * .2) : (2.5 + level * .2));
-      else Math.random() > .22 ? attack(1, Math.random() < .18 + level * .025) : move(1, two > one ? 4 : -4);
-    }, Math.max(360, 760 - level * 45));
+      const toward = two > one ? -1 : 1;
+      const roll = Math.random();
+      if (distance > 15) {
+        if (meterRef.current[1] >= 40 && roll < .1 + level * .012) attack(1, "power");
+        else move(1, toward * (1.8 + Math.min(1.7, level * .12)));
+      } else if (roll < .18) {
+        setBlocking((value) => [value[0], true]);
+        window.setTimeout(() => setBlocking((value) => [value[0], false]), 360 + Math.random() * 260);
+      } else attack(1, roll > .72 ? "heavy" : roll > .46 ? "kick" : "jab");
+    }, Math.max(300, 650 - level * 28));
     return () => window.clearInterval(ai);
-  }, [attack, level, mode, move, paused, winner]);
+  }, [attack, level, mode, move, paused, started, winner]);
 
   const reward = 70 + level * 20;
   return (
@@ -366,14 +479,17 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
       <div className="cinema-bars" aria-hidden="true"><span/><span/></div>
       <div className="fight-hud">
         <HealthBar fighter={p1} value={health[0]} meter={meter[0]} side="left" />
-        <div className="round-badge"><small>{mode === "story" ? `LEVEL ${level}` : "VERSUS"}</small><b>∞</b><span>ROUND 1</span></div>
+        <div className="round-badge"><small>{mode === "story" ? `LEVEL ${level}` : "VERSUS"}</small><b>{String(timeLeft).padStart(2, "0")}</b><span>ROUND 1</span></div>
         <HealthBar fighter={p2} value={health[1]} meter={meter[1]} side="right" />
       </div>
-      <button className="pause-button" onClick={() => setPaused(true)}>Ⅱ</button>
+      <div className="arena-label"><span>{stage.name}</span><small>{stage.place}</small></div>
+      <button className="pause-button" onClick={() => setPaused(true)} aria-label="Pause combat">Ⅱ</button>
       {effect && <PowerEffect effect={effect} from={positions[effect.side]} to={positions[effect.side === 0 ? 1 : 0]} />}
       {roundText && <div className="fight-callout">{roundText}</div>}
-      <div className="fight-controls"><span><kbd>A</kbd><kbd>D</kbd> MOVE · <kbd>W</kbd> JUMP · <kbd>S</kbd> BLOCK · <kbd>F</kbd> STRIKE · <kbd>G</kbd> POWER</span>{mode === "versus" && <span><kbd>←</kbd><kbd>→</kbd> MOVE · <kbd>↑</kbd> JUMP · <kbd>↓</kbd> BLOCK · <kbd>K</kbd> STRIKE · <kbd>L</kbd> POWER</span>}</div>
-      <TouchControls onLeft={() => move(0, -5)} onRight={() => move(0, 5)} onJump={() => jump(0)} onHit={() => attack(0)} onPower={() => attack(0, true)} />
+      {combatNotice && <div className="combat-notice">{combatNotice}</div>}
+      {combo && combo.count > 1 && <div className={`combo-readout side-${combo.side}`}><b>{combo.count}</b><span>HIT<br/>COMBO</span></div>}
+      <div className="fight-controls"><span><b>P1</b> <kbd>A</kbd><kbd>D</kbd> MOVE · <kbd>W</kbd> JUMP · <kbd>S</kbd> GUARD · <kbd>F</kbd> QUICK · <kbd>G</kbd> HEAVY · <kbd>H</kbd> POWER</span>{mode === "versus" && <span><b>P2</b> <kbd>←</kbd><kbd>→</kbd> MOVE · <kbd>↑</kbd> JUMP · <kbd>↓</kbd> GUARD · <kbd>J</kbd> QUICK · <kbd>K</kbd> HEAVY · <kbd>L</kbd> POWER</span>}</div>
+      <TouchControls onLeft={() => move(0, -3)} onRight={() => move(0, 3)} onJump={() => jump(0)} onHit={() => attack(0, "jab")} onPower={() => attack(0, "power")} />
       {paused && <div className="overlay"><div className="result-card pause-card"><small>COMBAT PAUSED</small><h2>CATCH YOUR BREATH</h2><button className="cta-button" onClick={() => setPaused(false)}>RESUME</button><button className="text-button" onClick={onExit}>EXIT TO MENU</button></div></div>}
       {winner !== null && <div className="overlay"><div className="result-card"><span className="result-glyph">{winner === 0 && mode === "story" ? "盟" : "勝"}</span><small>{winner === 0 ? "VICTORY" : "DEFEAT"}</small><h2>{winner === 0 && mode === "story" ? "FRIENDSHIP FORGED" : `${winner === 0 ? p1.name : p2.name} WINS`}</h2><p>{winner === 0 && mode === "story" ? `${p2.name} respects your strength and joins your journey. The next rival will be even stronger.` : "A fierce battle worthy of the Immortal arena."}</p>{winner === 0 && mode === "story" && <div className="reward"><span className="oh-coin">OH</span><b>+{reward}</b> VICTORY REWARD</div>}<button className="cta-button" onClick={() => winner === 0 && mode === "story" ? onStoryWin(reward) : onRematch()}>{winner === 0 && mode === "story" ? "NEXT LEVEL" : "REMATCH"} <span>→</span></button><button className="text-button" onClick={onExit}>BACK TO MENU</button></div></div>}
     </section>
@@ -398,6 +514,6 @@ function SelectedFighter({ fighter, label, align }: { fighter: Fighter; label: s
 
 function PanelHeading({ eyebrow, title, onBack }: { eyebrow: string; title: string; onBack: () => void }) { return <div className="panel-heading"><button className="back-button" onClick={onBack}>← <span>BACK</span></button><div><small>{eyebrow}</small><h1>{title}</h1></div><span className="heading-rule"/></div>; }
 
-function ControlsStrip() { return <div className="controls-strip"><div><b>PLAYER 1</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> MOVE</span><span><kbd>F</kbd> STRIKE</span><span><kbd>G</kbd> POWER</span></div><i>VS</i><div><b>PLAYER 2</b><span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> MOVE</span><span><kbd>K</kbd> STRIKE</span><span><kbd>L</kbd> POWER</span></div></div>; }
+function ControlsStrip() { return <div className="controls-strip"><div><b>PLAYER 1</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> MOVE / GUARD</span><span><kbd>F</kbd><kbd>G</kbd> ATTACK</span><span><kbd>H</kbd> POWER</span></div><i>VS</i><div><b>PLAYER 2</b><span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> MOVE / GUARD</span><span><kbd>J</kbd><kbd>K</kbd> ATTACK</span><span><kbd>L</kbd> POWER</span></div></div>; }
 
 function TouchControls({ onLeft, onRight, onJump, onHit, onPower }: { onLeft: () => void; onRight: () => void; onJump: () => void; onHit: () => void; onPower: () => void }) { return <div className="touch-controls"><div><button onPointerDown={onLeft}>←</button><button onPointerDown={onRight}>→</button><button onPointerDown={onJump}>↑</button></div><div><button onPointerDown={onHit}>HIT</button><button className="power-touch" onPointerDown={onPower}>POWER</button></div></div>; }
