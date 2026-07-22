@@ -6,6 +6,7 @@ import { ThreeArena } from "./ThreeArena";
 type Screen = "home" | "mode" | "select" | "shop" | "fight";
 type Mode = "story" | "versus";
 type ElementName = "fire" | "water" | "lightning" | "ice" | "sand" | "wind" | "shadow";
+type ConnectedPad = { index: number; name: string };
 
 export type Fighter = {
   id: string;
@@ -62,6 +63,7 @@ export function ImmortalCombat() {
   const [toast, setToast] = useState("");
   const [redeemed, setRedeemed] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [gamepads, setGamepads] = useState<ConnectedPad[]>([]);
 
   useEffect(() => {
     const restore = window.setTimeout(() => {
@@ -84,6 +86,20 @@ export function ImmortalCombat() {
     localStorage.setItem("immortal-fighters", JSON.stringify(unlocked));
     localStorage.setItem("immortal-codes", JSON.stringify(redeemed));
   }, [coins, unlocked, redeemed, hydrated]);
+
+  useEffect(() => {
+    const refreshGamepads = () => {
+      const next = Array.from(navigator.getGamepads?.() ?? [])
+        .filter((pad): pad is Gamepad => Boolean(pad?.connected))
+        .map((pad) => ({ index: pad.index, name: pad.id.replace(/\s*\([^)]*(vendor|product)[^)]*\)/gi, "").trim() || `Controller ${pad.index + 1}` }));
+      setGamepads((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+    };
+    window.addEventListener("gamepadconnected", refreshGamepads);
+    window.addEventListener("gamepaddisconnected", refreshGamepads);
+    const poller = window.setInterval(refreshGamepads, 900);
+    refreshGamepads();
+    return () => { window.removeEventListener("gamepadconnected", refreshGamepads); window.removeEventListener("gamepaddisconnected", refreshGamepads); window.clearInterval(poller); };
+  }, []);
 
   const flash = (message: string) => {
     setToast(message);
@@ -140,14 +156,14 @@ export function ImmortalCombat() {
       </header>}
 
       {screen === "home" && <HomeScreen onPlay={() => setScreen("mode")} onStory={() => openSelect("story")} onShop={() => setScreen("shop")} />}
-      {screen === "mode" && <ModeScreen onBack={() => setScreen("home")} onChoose={openSelect} />}
+      {screen === "mode" && <ModeScreen gamepads={gamepads} onBack={() => setScreen("home")} onChoose={openSelect} />}
       {screen === "select" && (
-        <SelectScreen mode={mode} unlocked={unlocked} p1Id={p1Id} p2Id={p2Id} stageId={stageId}
+        <SelectScreen mode={mode} gamepads={gamepads} unlocked={unlocked} p1Id={p1Id} p2Id={p2Id} stageId={stageId}
           onP1={setP1Id} onP2={setP2Id} onStage={setStageId} onBack={() => setScreen("mode")} onShop={() => setScreen("shop")} onFight={() => setScreen("fight")} />
       )}
       {screen === "shop" && <ShopScreen coins={coins} unlocked={unlocked} redeemed={redeemed.length} onBuy={buy} onRedeem={redeemCode} onBack={() => setScreen("home")} />}
       {screen === "fight" && (
-        <FightScreen key={`${mode}-${level}-${p1Id}-${p2Id}-${stageId}`} mode={mode} level={level} p1={getFighter(p1Id)} p2={getFighter(p2Id)} stage={stages.find((stage) => stage.id === stageId) ?? stages[0]}
+        <FightScreen key={`${mode}-${level}-${p1Id}-${p2Id}-${stageId}`} mode={mode} gamepads={gamepads} level={level} p1={getFighter(p1Id)} p2={getFighter(p2Id)} stage={stages.find((stage) => stage.id === stageId) ?? stages[0]}
           onExit={() => setScreen("home")}
           onRematch={() => setScreen("select")}
           onStoryWin={(reward) => { setCoins((value) => value + reward); setUnlocked((list) => list.includes(p2Id) ? list : [...list, p2Id]); setLevel((value) => value + 1); setP2Id(storyFighters[((level + 1) % storyFighters.length)].id); setScreen("select"); flash(`+${reward} OH · ${getFighter(p2Id).name} joined your crew`); }} />
@@ -173,12 +189,12 @@ function HomeScreen({ onPlay, onStory, onShop }: { onPlay: () => void; onStory: 
       </div>
       <div className="hero-fighter fighter-raizen" aria-hidden="true"><CharacterPortrait fighter={fighters[0]} /></div>
       <div className="season-card"><small>SEASON 01</small><b>THE FIRST OATH</b><span>7 fighters · 3 arenas · true 3D combat</span></div>
-      <p className="home-hint">LOCAL KEYBOARD COMBAT · NO ACCOUNT NEEDED</p>
+      <p className="home-hint">CONTROLLER-FIRST LOCAL COMBAT · KEYBOARD FALLBACK · NO ACCOUNT NEEDED</p>
     </section>
   );
 }
 
-function ModeScreen({ onBack, onChoose }: { onBack: () => void; onChoose: (mode: Mode) => void }) {
+function ModeScreen({ gamepads, onBack, onChoose }: { gamepads: ConnectedPad[]; onBack: () => void; onChoose: (mode: Mode) => void }) {
   return (
     <section className="panel-screen screen-enter">
       <PanelHeading eyebrow="CHOOSE YOUR PATH" title="HOW WILL YOU FIGHT?" onBack={onBack} />
@@ -189,24 +205,24 @@ function ModeScreen({ onBack, onChoose }: { onBack: () => void; onChoose: (mode:
           <b>BEGIN YOUR LEGEND →</b>
         </button>
         <button className="mode-card versus-card" onClick={() => onChoose("versus")}>
-          <span className="mode-number">02</span><div className="mode-art">対</div><small>2 PLAYERS · 1 KEYBOARD</small><h2>LOCAL VERSUS</h2>
-          <p>Challenge a friend beside you. Player one uses the left side; player two takes the right.</p>
+          <span className="mode-number">02</span><div className="mode-art">対</div><small>2 PLAYERS · CONTROLLER READY</small><h2>LOCAL VERSUS</h2>
+          <p>Challenge a friend with two controllers, or use keyboard plus controller when only one pad is connected.</p>
           <b>SETTLE THE SCORE →</b>
         </button>
       </div>
-      <ControlsStrip />
+      <ControllerStatus gamepads={gamepads} />
     </section>
   );
 }
 
-function SelectScreen(props: { mode: Mode; unlocked: string[]; p1Id: string; p2Id: string; stageId: string; onP1: (id: string) => void; onP2: (id: string) => void; onStage: (id: string) => void; onBack: () => void; onShop: () => void; onFight: () => void }) {
-  const [step, setStep] = useState<"fighter" | "stage">("fighter");
+function SelectScreen(props: { mode: Mode; gamepads: ConnectedPad[]; unlocked: string[]; p1Id: string; p2Id: string; stageId: string; onP1: (id: string) => void; onP2: (id: string) => void; onStage: (id: string) => void; onBack: () => void; onShop: () => void; onFight: () => void }) {
+  const [step, setStep] = useState<"fighter" | "stage" | "controls">("fighter");
   const [activeSlot, setActiveSlot] = useState<0 | 1>(0);
   const p1 = getFighter(props.p1Id);
   const p2 = getFighter(props.p2Id);
   return (
     <section className="panel-screen select-screen screen-enter">
-      <PanelHeading eyebrow={props.mode === "story" ? "STORY MODE" : "LOCAL VERSUS"} title={step === "fighter" ? "CHOOSE YOUR FIGHTERS" : "CHOOSE THE ARENA"} onBack={props.onBack} />
+      <PanelHeading eyebrow={props.mode === "story" ? "STORY MODE" : "LOCAL VERSUS"} title={step === "fighter" ? "CHOOSE YOUR FIGHTERS" : step === "stage" ? "CHOOSE THE ARENA" : "READY YOUR CONTROLS"} onBack={props.onBack} />
       {step === "fighter" ? <>
         <div className="versus-preview">
           <button className={`selected-slot ${activeSlot === 0 ? "active" : ""}`} onClick={() => setActiveSlot(0)}><SelectedFighter fighter={p1} label="PLAYER 1" align="left" /></button>
@@ -225,16 +241,47 @@ function SelectScreen(props: { mode: Mode; unlocked: string[]; p1Id: string; p2I
         </div>
         <p className="selection-help">{props.mode === "story" ? "Choose your fighter. Your next story rival is assigned by the campaign." : `Selecting for ${activeSlot === 0 ? "Player 1" : "Player 2"}. Choose a portrait above to switch slots.`}</p>
         <button className="cta-button" onClick={() => setStep("stage")}>CHOOSE ARENA <span>→</span></button>
-      </> : <>
+      </> : step === "stage" ? <>
         <div className="stage-grid">
           {stages.map((stage) => <button key={stage.id} className={`stage-card ${props.stageId === stage.id ? "active" : ""}`} onClick={() => props.onStage(stage.id)} style={{"--sky": stage.sky, "--accent": stage.accent} as React.CSSProperties}>
             <div className="stage-mini"><span className="mini-moon"/><i/><i/><i/><b/></div><small>{stage.place}</small><h3>{stage.name}</h3><span className="selected-label">{props.stageId === stage.id ? "SELECTED" : "SELECT"}</span>
           </button>)}
         </div>
-        <div className="stage-actions"><button className="text-button" onClick={() => setStep("fighter")}>← FIGHTERS</button><button className="cta-button fight-cta" onClick={props.onFight}>ENTER COMBAT <span>⚔</span></button></div>
-      </>}
+        <div className="stage-actions"><button className="text-button" onClick={() => setStep("fighter")}>← FIGHTERS</button><button className="cta-button fight-cta" onClick={() => setStep("controls")}>SET CONTROLS <span>→</span></button></div>
+      </> : <ControlSetup mode={props.mode} gamepads={props.gamepads} onBack={() => setStep("stage")} onFight={props.onFight} />}
     </section>
   );
+}
+
+function ControllerStatus({ gamepads }: { gamepads: ConnectedPad[] }) {
+  return <div className={`controller-status ${gamepads.length ? "connected" : "waiting"}`}>
+    <span className="pad-symbol" aria-hidden="true">⊕</span>
+    <div><small>CONTROLLER LINK</small><b>{gamepads.length ? `${gamepads.length} CONTROLLER${gamepads.length > 1 ? "S" : ""} READY` : "PRESS ANY CONTROLLER BUTTON"}</b></div>
+    <p>{gamepads.length ? gamepads.map((pad) => pad.name).join(" · ") : "Keyboard remains available while the browser waits for a gamepad."}</p>
+    <i className="status-light" aria-hidden="true" />
+  </div>;
+}
+
+function ControlSetup({ mode, gamepads, onBack, onFight }: { mode: Mode; gamepads: ConnectedPad[]; onBack: () => void; onFight: () => void }) {
+  const twoPads = gamepads.length >= 2;
+  const onePad = gamepads.length === 1;
+  const p1Device = mode === "story" ? (onePad || twoPads ? gamepads[0].name : "Keyboard") : twoPads ? gamepads[0].name : "Keyboard";
+  const p2Device = mode === "story" ? "CPU Rival" : twoPads ? gamepads[1].name : onePad ? gamepads[0].name : "Keyboard — right side";
+  return <div className="control-setup">
+    <div className="control-intro">
+      <span className="pad-symbol large" aria-hidden="true">⊕</span>
+      <div><small>INPUT ASSIGNMENT</small><h2>{gamepads.length ? "CONTROLLERS DETECTED" : "WAITING FOR CONTROLLERS"}</h2><p>Connect a controller and press any button. Assignments update automatically without reloading the game.</p></div>
+      <div className={`connection-pill ${gamepads.length ? "online" : ""}`}><i /> {gamepads.length} CONNECTED</div>
+    </div>
+    <div className="device-grid">
+      <article className="device-card p1-device"><small>PLAYER 1</small><div className="device-icon">{p1Device === "Keyboard" ? "⌨" : "⊕"}</div><h3>{p1Device}</h3><p>{p1Device === "Keyboard" ? "WASD movement · F/G/H attacks" : "Controller assigned automatically"}</p></article>
+      <div className="device-vs">VS</div>
+      <article className="device-card p2-device"><small>{mode === "story" ? "RIVAL" : "PLAYER 2"}</small><div className="device-icon">{p2Device.includes("Keyboard") ? "⌨" : mode === "story" ? "AI" : "⊕"}</div><h3>{p2Device}</h3><p>{mode === "story" ? "Adaptive story-mode opponent" : p2Device.includes("Keyboard") ? "Arrow movement · J/K/L attacks" : "Controller assigned automatically"}</p></article>
+    </div>
+    {gamepads.length > 0 && <div className="pad-map" aria-label="Controller button map"><span><kbd>LS</kbd><b>MOVE</b></span><span><kbd>A/✕</kbd><b>JUMP</b></span><span><kbd>LB/L1</kbd><b>GUARD</b></span><span><kbd>X/□</kbd><b>QUICK</b></span><span><kbd>Y/△</kbd><b>HEAVY</b></span><span><kbd>B/○</kbd><b>POWER</b></span></div>}
+    {!gamepads.length && <p className="controller-warning"><b>KEYBOARD FALLBACK ACTIVE.</b> For the intended experience, connect at least one USB or Bluetooth controller and press a button.</p>}
+    <div className="stage-actions"><button className="text-button" onClick={onBack}>← ARENA</button><button className="cta-button fight-cta" onClick={onFight}>ENTER COMBAT <span>⚔</span></button></div>
+  </div>;
 }
 
 function ShopScreen({ coins, unlocked, redeemed, onBuy, onRedeem, onBack }: { coins: number; unlocked: string[]; redeemed: number; onBuy: (fighter: Fighter) => void; onRedeem: (code: string) => string; onBack: () => void }) {
@@ -266,7 +313,7 @@ function ShopScreen({ coins, unlocked, redeemed, onBuy, onRedeem, onBack }: { co
 
 type CombatMove = "jab" | "heavy" | "kick" | "power";
 
-function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin }: { mode: Mode; level: number; p1: Fighter; p2: Fighter; stage: Stage; onExit: () => void; onRematch: () => void; onStoryWin: (reward: number) => void }) {
+function FightScreen({ mode, gamepads, level, p1, p2, stage, onExit, onRematch, onStoryWin }: { mode: Mode; gamepads: ConnectedPad[]; level: number; p1: Fighter; p2: Fighter; stage: Stage; onExit: () => void; onRematch: () => void; onStoryWin: (reward: number) => void }) {
   const [health, setHealth] = useState<[number, number]>([100, 100]);
   const [meter, setMeter] = useState<[number, number]>([35, 35]);
   const [positions, setPositions] = useState<[number, number]>([28, 72]);
@@ -284,12 +331,16 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
   const cooldown = useRef<[number, number]>([0, 0]);
   const comboRef = useRef<[{ count: number; expires: number }, { count: number; expires: number }]>([{ count: 0, expires: 0 }, { count: 0, expires: 0 }]);
   const heldKeys = useRef(new Set<string>());
+  const padButtonsRef = useRef<[boolean[], boolean[]]>([[], []]);
+  const padGuardRef = useRef<[boolean, boolean]>([false, false]);
   const positionsRef = useRef(positions);
   const blockingRef = useRef(blocking);
   const healthRef = useRef(health);
   const meterRef = useRef(meter);
   const winnerRef = useRef(winner);
   const pausedRef = useRef(paused);
+  const p1PadIndex = mode === "story" ? gamepads[0]?.index ?? null : gamepads.length >= 2 ? gamepads[0].index : null;
+  const p2PadIndex = mode === "versus" ? gamepads.length >= 2 ? gamepads[1].index : gamepads[0]?.index ?? null : null;
   const started = roundText === "";
   useEffect(() => { positionsRef.current = positions; }, [positions]);
   useEffect(() => { blockingRef.current = blocking; }, [blocking]);
@@ -340,6 +391,13 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
     window.setTimeout(() => setJumping((current) => { const next: [boolean, boolean] = [...current]; next[side] = false; return next; }), 650);
   }, [jumping]);
 
+  const rumble = useCallback((side: 0 | 1, duration: number, strong: number, weak: number) => {
+    const padIndex = side === 0 ? p1PadIndex : p2PadIndex;
+    if (padIndex === null) return;
+    const pad = navigator.getGamepads?.()[padIndex] as (Gamepad & { vibrationActuator?: { playEffect: (type: string, options: { duration: number; strongMagnitude: number; weakMagnitude: number }) => Promise<unknown> } }) | null;
+    void pad?.vibrationActuator?.playEffect("dual-rumble", { duration, strongMagnitude: strong, weakMagnitude: weak }).catch(() => undefined);
+  }, [p1PadIndex, p2PadIndex]);
+
   const landHit = useCallback((attacker: 0 | 1, baseDamage: number, reach: number, projectile = false) => {
     if (winnerRef.current !== null || pausedRef.current) return;
     const target = attacker === 0 ? 1 : 0;
@@ -363,6 +421,8 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
     window.setTimeout(() => setCombatNotice(""), 360);
     setHitSide(target);
     window.setTimeout(() => setHitSide(null), guarded ? 100 : 230);
+    rumble(target, guarded ? 80 : projectile ? 260 : 150, guarded ? .12 : projectile ? .85 : .5, guarded ? .18 : .62);
+    rumble(attacker, projectile ? 190 : 75, projectile ? .34 : .08, projectile ? .55 : .2);
     if (!guarded) move(target, attacker === 0 ? 2.4 : -2.4);
     setHealth((current) => {
       const next: [number, number] = [...current];
@@ -376,7 +436,7 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
       next[target] = Math.min(100, next[target] + (guarded ? 3 : 7));
       return next;
     });
-  }, [finish, level, mode, move]);
+  }, [finish, level, mode, move, rumble]);
 
   const attack = useCallback((side: 0 | 1, kind: CombatMove = "jab") => {
     const now = Date.now();
@@ -417,11 +477,43 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
           if (heldKeys.current.has("arrowright")) move(1, 0.58 * dt);
         }
       }
+      const pads = navigator.getGamepads?.() ?? [];
+      const readPad = (side: 0 | 1, padIndex: number | null) => {
+        const pad = padIndex === null ? null : pads[padIndex];
+        if (!pad?.connected) {
+          if (padGuardRef.current[side]) {
+            padGuardRef.current[side] = false;
+            setBlocking((value) => { const next: [boolean, boolean] = [...value]; next[side] = side === 0 ? heldKeys.current.has("s") : heldKeys.current.has("arrowdown"); return next; });
+          }
+          return;
+        }
+        const previous = padButtonsRef.current[side];
+        const pressed = (button: number) => Boolean(pad.buttons[button]?.pressed);
+        const edge = (button: number) => pressed(button) && !previous[button];
+        if (!pausedRef.current && winnerRef.current === null && roundText === "") {
+          const stick = Math.abs(pad.axes[0] ?? 0) > .18 ? pad.axes[0] : pressed(14) ? -1 : pressed(15) ? 1 : 0;
+          if (Math.abs(stick) > .18) move(side, stick * .72 * dt);
+          if (edge(0)) jump(side);
+          if (edge(2)) attack(side, "jab");
+          if (edge(3)) attack(side, "heavy");
+          if (edge(1)) attack(side, "power");
+        }
+        if (edge(9)) setPaused((value) => !value);
+        const keyboardGuard = side === 0 ? heldKeys.current.has("s") : heldKeys.current.has("arrowdown");
+        const guard = pressed(4) || pressed(6);
+        if (guard !== padGuardRef.current[side]) {
+          padGuardRef.current[side] = guard;
+          setBlocking((value) => { const next: [boolean, boolean] = [...value]; next[side] = guard || keyboardGuard; return next; });
+        }
+        padButtonsRef.current[side] = pad.buttons.map((button) => button.pressed);
+      };
+      readPad(0, p1PadIndex);
+      if (mode === "versus") readPad(1, p2PadIndex);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [mode, move, roundText]);
+  }, [attack, jump, mode, move, p1PadIndex, p2PadIndex, roundText]);
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
@@ -488,7 +580,7 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
       {roundText && <div className="fight-callout">{roundText}</div>}
       {combatNotice && <div className="combat-notice">{combatNotice}</div>}
       {combo && combo.count > 1 && <div className={`combo-readout side-${combo.side}`}><b>{combo.count}</b><span>HIT<br/>COMBO</span></div>}
-      <div className="fight-controls"><span><b>P1</b> <kbd>A</kbd><kbd>D</kbd> MOVE · <kbd>W</kbd> JUMP · <kbd>S</kbd> GUARD · <kbd>F</kbd> QUICK · <kbd>G</kbd> HEAVY · <kbd>H</kbd> POWER</span>{mode === "versus" && <span><b>P2</b> <kbd>←</kbd><kbd>→</kbd> MOVE · <kbd>↑</kbd> JUMP · <kbd>↓</kbd> GUARD · <kbd>J</kbd> QUICK · <kbd>K</kbd> HEAVY · <kbd>L</kbd> POWER</span>}</div>
+      <div className="fight-controls"><FightControlLegend player="P1" controller={p1PadIndex !== null} />{mode === "versus" && <FightControlLegend player="P2" controller={p2PadIndex !== null} />}</div>
       <TouchControls onLeft={() => move(0, -3)} onRight={() => move(0, 3)} onJump={() => jump(0)} onHit={() => attack(0, "jab")} onPower={() => attack(0, "power")} />
       {paused && <div className="overlay"><div className="result-card pause-card"><small>COMBAT PAUSED</small><h2>CATCH YOUR BREATH</h2><button className="cta-button" onClick={() => setPaused(false)}>RESUME</button><button className="text-button" onClick={onExit}>EXIT TO MENU</button></div></div>}
       {winner !== null && <div className="overlay"><div className="result-card"><span className="result-glyph">{winner === 0 && mode === "story" ? "盟" : "勝"}</span><small>{winner === 0 ? "VICTORY" : "DEFEAT"}</small><h2>{winner === 0 && mode === "story" ? "FRIENDSHIP FORGED" : `${winner === 0 ? p1.name : p2.name} WINS`}</h2><p>{winner === 0 && mode === "story" ? `${p2.name} respects your strength and joins your journey. The next rival will be even stronger.` : "A fierce battle worthy of the Immortal arena."}</p>{winner === 0 && mode === "story" && <div className="reward"><span className="oh-coin">OH</span><b>+{reward}</b> VICTORY REWARD</div>}<button className="cta-button" onClick={() => winner === 0 && mode === "story" ? onStoryWin(reward) : onRematch()}>{winner === 0 && mode === "story" ? "NEXT LEVEL" : "REMATCH"} <span>→</span></button><button className="text-button" onClick={onExit}>BACK TO MENU</button></div></div>}
@@ -514,6 +606,11 @@ function SelectedFighter({ fighter, label, align }: { fighter: Fighter; label: s
 
 function PanelHeading({ eyebrow, title, onBack }: { eyebrow: string; title: string; onBack: () => void }) { return <div className="panel-heading"><button className="back-button" onClick={onBack}>← <span>BACK</span></button><div><small>{eyebrow}</small><h1>{title}</h1></div><span className="heading-rule"/></div>; }
 
-function ControlsStrip() { return <div className="controls-strip"><div><b>PLAYER 1</b><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> MOVE / GUARD</span><span><kbd>F</kbd><kbd>G</kbd> ATTACK</span><span><kbd>H</kbd> POWER</span></div><i>VS</i><div><b>PLAYER 2</b><span><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> MOVE / GUARD</span><span><kbd>J</kbd><kbd>K</kbd> ATTACK</span><span><kbd>L</kbd> POWER</span></div></div>; }
+function FightControlLegend({ player, controller }: { player: "P1" | "P2"; controller: boolean }) {
+  if (controller) return <span className="controller-legend"><b>{player}</b> <kbd>LS</kbd> MOVE · <kbd>A/✕</kbd> JUMP · <kbd>LB</kbd> GUARD · <kbd>X/□</kbd> QUICK · <kbd>Y/△</kbd> HEAVY · <kbd>B/○</kbd> POWER</span>;
+  return player === "P1"
+    ? <span><b>P1</b> <kbd>A</kbd><kbd>D</kbd> MOVE · <kbd>W</kbd> JUMP · <kbd>S</kbd> GUARD · <kbd>F</kbd> QUICK · <kbd>G</kbd> HEAVY · <kbd>H</kbd> POWER</span>
+    : <span><b>P2</b> <kbd>←</kbd><kbd>→</kbd> MOVE · <kbd>↑</kbd> JUMP · <kbd>↓</kbd> GUARD · <kbd>J</kbd> QUICK · <kbd>K</kbd> HEAVY · <kbd>L</kbd> POWER</span>;
+}
 
 function TouchControls({ onLeft, onRight, onJump, onHit, onPower }: { onLeft: () => void; onRight: () => void; onJump: () => void; onHit: () => void; onPower: () => void }) { return <div className="touch-controls"><div><button onPointerDown={onLeft}>←</button><button onPointerDown={onRight}>→</button><button onPointerDown={onJump}>↑</button></div><div><button onPointerDown={onHit}>HIT</button><button className="power-touch" onPointerDown={onPower}>POWER</button></div></div>; }
