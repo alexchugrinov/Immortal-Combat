@@ -108,7 +108,9 @@ button:focus-visible { outline:2px solid #fff; outline-offset:4px; }
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
 
 /* Phaser fighting engine */
-.phaser-fight{background:#05060a;min-height:540px}.phaser-arena{position:absolute;inset:0;z-index:0;overflow:hidden;background:#05060a;display:grid;place-items:center}.phaser-arena canvas{display:block;max-width:100%;max-height:100%;filter:saturate(1.12) contrast(1.08);box-shadow:0 0 80px #000}.phaser-fight .fight-hud{pointer-events:none}.phaser-fight .fight-controls{font-size:8px;letter-spacing:.025em}.phaser-fight .fight-controls span{white-space:nowrap}.cta-button:disabled{cursor:not-allowed;opacity:.35;filter:grayscale(1)}
+.phaser-fight{background:#05060a;min-height:540px}.phaser-arena{position:absolute;inset:0;z-index:0;overflow:hidden;background:#05060a;display:grid;place-items:center}.phaser-arena canvas{display:block;width:100%!important;height:auto!important;aspect-ratio:16/9;max-width:100%;max-height:100%;filter:saturate(1.08) contrast(1.05);box-shadow:0 0 80px #000}.phaser-fight .fight-hud{pointer-events:none;grid-template-columns:minmax(0,1fr) 94px minmax(0,1fr)}.phaser-fight .health-block{min-width:0}.phaser-fight .health-track,.phaser-fight .power-track{width:100%}.phaser-fight .fight-controls{font-size:8px;letter-spacing:.025em}.phaser-fight .fight-controls span{white-space:nowrap}.cta-button:disabled{cursor:not-allowed;opacity:.35;filter:grayscale(1)}
+
+@media(min-aspect-ratio:16/9){.phaser-arena canvas{width:auto!important;height:100%!important}}
 
 @media(max-width:900px){
   .phaser-fight .fight-hud{top:18px;left:14px;right:14px;grid-template-columns:minmax(0,1fr) 58px minmax(0,1fr);gap:7px}

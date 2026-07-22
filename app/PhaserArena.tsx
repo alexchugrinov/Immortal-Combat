@@ -81,8 +81,8 @@ export function PhaserArena({ mode, level, fighters, stage, paused, onSnapshot, 
             this.anims.create({ key, frames: this.anims.generateFrameNumbers(key, { start: 0, end }), frameRate, repeat });
           }
           sprites = [
-            this.add.sprite(370, 624, "idle").setOrigin(.5, 1).setScale(2.55).setTint(parseInt(fighters[0].color.slice(1), 16)),
-            this.add.sprite(910, 624, "idle").setOrigin(.5, 1).setScale(2.55).setFlipX(true).setTint(parseInt(fighters[1].color.slice(1), 16)),
+            this.add.sprite(370, 624, "idle").setOrigin(.5, .77).setScale(2.08).setTint(0xffffff, 0xffffff, parseInt(fighters[0].color.slice(1), 16), parseInt(fighters[0].color.slice(1), 16)),
+            this.add.sprite(910, 624, "idle").setOrigin(.5, .77).setScale(2.08).setFlipX(true).setTint(0xffffff, 0xffffff, parseInt(fighters[1].color.slice(1), 16), parseInt(fighters[1].color.slice(1), 16)),
           ];
           sprites.forEach((sprite) => sprite.play("idle"));
           const keyboard = this.input.keyboard!;
@@ -131,7 +131,7 @@ export function PhaserArena({ mode, level, fighters, stage, paused, onSnapshot, 
         }
       }
 
-      game = new Phaser.Game({ type: Phaser.AUTO, parent: mount, width: 1280, height: 720, backgroundColor: "#08090d", render: { antialias: true, pixelArt: false }, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }, scene: CombatScene });
+      game = new Phaser.Game({ type: Phaser.AUTO, parent: mount, width: 1280, height: 720, backgroundColor: "#08090d", render: { antialias: true, pixelArt: false }, scale: { mode: Phaser.Scale.NONE }, scene: CombatScene });
     };
     void boot();
     return () => { destroyed = true; game?.destroy(true); };
