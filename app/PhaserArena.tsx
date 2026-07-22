@@ -9,17 +9,12 @@ type Props = {
   onSnapshot: (snapshot: CombatSnapshot) => void; onPause: () => void;
 };
 
-const sheets = {
-  idle: ["Idle.png", 50, 24, -1], walk: ["Walk.png", 33, 34, -1], block: ["BlockIdle.png", 20, 28, -1],
-  crouch: ["Crouch.png", 17, 32, 0], jump: ["Jump.png", 29, 40, 0], light: ["Attack1.png", 30, 82, 0],
-  heavy: ["Slash.png", 45, 76, 0], kick: ["Kick.png", 36, 76, 0], hit: ["Impact.png", 23, 68, 0],
-  ko: ["Death.png", 69, 48, 0], special: ["Casting2.png", 31, 37, 0],
-} as const;
-
-const stateAnimation: Record<FighterState, keyof typeof sheets> = {
-  idle: "idle", walk: "walk", crouch: "crouch", block: "block", jump: "jump", light: "light", heavy: "heavy",
-  kick: "kick", special: "special", hit: "hit", blockstun: "block", ko: "ko",
+const poseForState: Record<FighterState, 0 | 1 | 2 | 3> = {
+  idle: 0, walk: 0, crouch: 3, block: 3, jump: 0, light: 1, heavy: 1,
+  kick: 2, special: 1, hit: 0, blockstun: 3, ko: 0,
 };
+
+const usesNyraArt = (fighter: Fighter) => ["nyra", "sahra", "aeri"].includes(fighter.id);
 
 export function PhaserArena({ mode, level, fighters, stage, paused, onSnapshot, onPause }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -37,55 +32,48 @@ export function PhaserArena({ mode, level, fighters, stage, paused, onSnapshot, 
     const boot = async () => {
       const Phaser = (await import("phaser")).default;
       if (destroyed) return;
-      const base = `${(import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? "/"}game/knight/`;
+      const base = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? "/";
       const simulation = new FightingEngine(level);
       let accumulator = 0;
       let lastHitStamp = 0;
       let lastSnapshotFrame = 0;
       let sprites: [import("phaser").GameObjects.Sprite, import("phaser").GameObjects.Sprite];
+      let shadows: [import("phaser").GameObjects.Ellipse, import("phaser").GameObjects.Ellipse];
+      let powerAuras: [import("phaser").GameObjects.Arc, import("phaser").GameObjects.Arc];
       let keys: Record<string, import("phaser").Input.Keyboard.Key>;
       let skyParticles: import("phaser").GameObjects.Arc[] = [];
 
       class CombatScene extends Phaser.Scene {
         constructor() { super("combat"); }
         preload() {
-          for (const [key, [file]] of Object.entries(sheets)) this.load.spritesheet(key, `${base}${file}`, { frameWidth: 128, frameHeight: 256 });
+          this.load.spritesheet("combat-atlas", `${base}game/fighters-combat-atlas.png`, { frameWidth: 384, frameHeight: 512 });
+          this.load.image("arena-neon", `${base}game/neon-rooftop-arena.png`);
         }
         create() {
           const width = 1280, height = 720;
           this.cameras.main.setBackgroundColor(stage.sky);
-          const graphics = this.add.graphics();
-          graphics.fillStyle(0x06070c, 1).fillRect(0, 0, width, height);
-          graphics.fillStyle(parseInt(stage.sky.slice(1), 16), .72).fillRect(0, 0, width, 460);
-          graphics.fillStyle(0x090b12, 1).fillRect(0, 510, width, 210);
-          graphics.lineStyle(2, parseInt(stage.accent.slice(1), 16), .5).lineBetween(0, 620, width, 620);
-          for (let i = 0; i < 22; i++) {
-            const buildingHeight = 130 + (i * 73) % 270;
-            graphics.fillStyle(i % 4 ? 0x0b0d14 : 0x12111b, 1).fillRect(i * 62 - 24, 510 - buildingHeight, 58, buildingHeight);
-            graphics.fillStyle(i % 5 === 0 ? parseInt(stage.accent.slice(1), 16) : 0xd2a76f, .38);
-            for (let y = 510 - buildingHeight + 28; y < 480; y += 36) graphics.fillRect(i * 62 - 8, y, 22, 2);
-          }
-          graphics.fillStyle(0x05060a, .92).fillRect(0, 620, width, 100);
-          graphics.lineStyle(1, parseInt(stage.accent.slice(1), 16), .18);
-          for (let x = 0; x < width; x += 80) graphics.lineBetween(640, 620, x, 720);
-          for (let y = 635; y < 720; y += 22) graphics.lineBetween(0, y, width, y);
+          const backdrop = this.add.image(640, 360, "arena-neon").setDisplaySize(1304, 734).setDepth(0);
+          this.tweens.add({ targets: backdrop, x: 648, scaleX: 1.018, scaleY: 1.018, duration: 9000, yoyo: true, repeat: -1, ease: "Sine.InOut" });
+          const atmosphere = this.add.graphics().setDepth(1);
+          atmosphere.fillStyle(parseInt(stage.sky.slice(1), 16), .1).fillRect(0, 0, width, height);
+          atmosphere.fillStyle(0x030408, .22).fillRect(0, 0, width, 120);
+          atmosphere.lineStyle(2, parseInt(stage.accent.slice(1), 16), .62).lineBetween(0, 626, width, 626);
+          skyParticles = Array.from({ length: 42 }, (_, i) => this.add.circle((i * 149) % width, 75 + (i * 83) % 505, 1 + i % 2, i % 3 ? 0xffc979 : parseInt(stage.accent.slice(1), 16), .5).setDepth(5));
 
-          for (let i = 0; i < 38; i++) {
-            const x = 20 + (i * 97) % 1240; const y = 500 + (i % 3) * 25;
-            const body = this.add.rectangle(x, y, 13, 42 + (i % 4) * 5, i % 8 === 0 ? parseInt(stage.accent.slice(1), 16) : 0x12121a).setOrigin(.5, 1);
-            this.add.circle(x, y - body.height - 6, 7, i % 3 ? 0x382b2a : 0x64433a);
-          }
-          skyParticles = Array.from({ length: 36 }, (_, i) => this.add.circle((i * 149) % width, 80 + (i * 83) % 430, 1 + i % 2, i % 3 ? 0xffc979 : parseInt(stage.accent.slice(1), 16), .38));
-
-          for (const [key, [, end, frameRate, repeat]] of Object.entries(sheets)) {
-            this.anims.create({ key, frames: this.anims.generateFrameNumbers(key, { start: 0, end }), frameRate, repeat });
-          }
-          sprites = [
-            this.add.sprite(370, 624, "idle").setOrigin(.5, .77).setScale(2.08).setTint(0xffffff, 0xffffff, parseInt(fighters[0].color.slice(1), 16), parseInt(fighters[0].color.slice(1), 16)),
-            this.add.sprite(910, 624, "idle").setOrigin(.5, .77).setScale(2.08).setFlipX(true).setTint(0xffffff, 0xffffff, parseInt(fighters[1].color.slice(1), 16), parseInt(fighters[1].color.slice(1), 16)),
+          shadows = [
+            this.add.ellipse(370, 620, 240, 34, 0x000000, .68).setDepth(7),
+            this.add.ellipse(910, 620, 240, 34, 0x000000, .68).setDepth(7),
           ];
-          sprites.forEach((sprite) => sprite.play("idle"));
+          powerAuras = [
+            this.add.circle(370, 430, 112, parseInt(fighters[0].glow.slice(1), 16), .13).setStrokeStyle(3, parseInt(fighters[0].glow.slice(1), 16), .8).setDepth(8).setVisible(false),
+            this.add.circle(910, 430, 112, parseInt(fighters[1].glow.slice(1), 16), .13).setStrokeStyle(3, parseInt(fighters[1].glow.slice(1), 16), .8).setDepth(8).setVisible(false),
+          ];
+          sprites = [
+            this.add.sprite(370, 626, "combat-atlas", usesNyraArt(fighters[0]) ? 4 : 0).setOrigin(.5, .96).setScale(.91).setDepth(10),
+            this.add.sprite(910, 626, "combat-atlas", usesNyraArt(fighters[1]) ? 4 : 0).setOrigin(.5, .96).setScale(.91).setFlipX(true).setDepth(10),
+          ];
           const keyboard = this.input.keyboard!;
+          keyboard.addCapture(["LEFT", "RIGHT", "DOWN", "SPACE", "D", "F", "G", "H", "R", "ESC"]);
           keys = keyboard.addKeys({ left: "LEFT", right: "RIGHT", down: "DOWN", jump: "SPACE", block: "D", light: "F", heavy: "G", kick: "H", special: "R", pause: "ESC" }) as Record<string, import("phaser").Input.Keyboard.Key>;
           keys.pause.on("down", () => callbacks.current.onPause());
           callbacks.current.onSnapshot(simulation.snapshot());
@@ -115,9 +103,23 @@ export function PhaserArena({ mode, level, fighters, stage, paused, onSnapshot, 
           }
           snapshot.fighters.forEach((fighter, side) => {
             const sprite = sprites[side];
-            sprite.setPosition(fighter.x, 624 - fighter.y * 1.05).setFlipX(fighter.facing === -1);
-            const animation = stateAnimation[fighter.state];
-            if (sprite.anims.currentAnim?.key !== animation) sprite.play(animation, true);
+            const rowOffset = usesNyraArt(fighters[side]) ? 4 : 0;
+            const pose = poseForState[fighter.state];
+            const airborne = fighter.y > 1;
+            const breathe = fighter.state === "idle" ? Math.sin(this.time.now / 260 + side) * .008 : 0;
+            const crouch = fighter.state === "crouch" ? .84 : 1;
+            const hitTilt = fighter.state === "hit" ? (side ? -5 : 5) : 0;
+            const koTilt = fighter.state === "ko" ? (side ? 84 : -84) : hitTilt;
+            sprite.setFrame(rowOffset + pose)
+              .setPosition(fighter.x, 626 - fighter.y * 1.06 + (fighter.state === "walk" ? Math.sin(this.time.now / 85) * 4 : 0))
+              .setFlipX(fighter.facing === -1)
+              .setScale(.91 + breathe, (.91 + breathe) * crouch)
+              .setRotation(Phaser.Math.DegToRad(koTilt))
+              .setAlpha(fighter.state === "ko" ? .78 : 1);
+            if (fighter.state === "hit") sprite.setTintFill(0xff6b5e); else sprite.clearTint();
+            shadows[side].setPosition(fighter.x, 622).setScale(airborne ? .62 : 1, airborne ? .72 : 1).setAlpha(airborne ? .32 : .68);
+            const charging = fighter.state === "special";
+            powerAuras[side].setVisible(charging).setPosition(fighter.x, 430 - fighter.y).setScale(1 + Math.sin(this.time.now / 70) * .12).setAlpha(.55 + Math.sin(this.time.now / 90) * .25);
           });
           skyParticles.forEach((particle, i) => { particle.x += .12 + (i % 3) * .08; if (particle.x > 1285) particle.x = -5; });
           if (snapshot.hit && snapshot.hit.stamp !== lastHitStamp) {

@@ -201,12 +201,12 @@ function ModeScreen({ gamepads, onBack, onChoose }: { gamepads: ConnectedPad[]; 
       <PanelHeading eyebrow="CHOOSE YOUR PATH" title="HOW WILL YOU FIGHT?" onBack={onBack} />
       <div className="mode-grid">
         <button className="mode-card story-card" onClick={() => onChoose("story")}>
-          <span className="mode-number">01</span><div className="mode-art">盟</div><small>CAMPAIGN</small><h2>STORY MODE</h2>
+          <span className="mode-number">01</span><div className="mode-portraits"><CharacterPortrait fighter={fighters[0]} /><CharacterPortrait fighter={fighters[2]} /></div><small>CAMPAIGN</small><h2>STORY MODE</h2>
           <p>Defeat rivals, earn their respect, and recruit them into your growing crew. Every level gets tougher.</p>
           <b>BEGIN YOUR LEGEND →</b>
         </button>
         <button className="mode-card versus-card" onClick={() => onChoose("versus")}>
-          <span className="mode-number">02</span><div className="mode-art">対</div><small>2 PLAYERS · CONTROLLER READY</small><h2>LOCAL VERSUS</h2>
+          <span className="mode-number">02</span><div className="mode-portraits"><CharacterPortrait fighter={fighters[0]} /><CharacterPortrait fighter={fighters[1]} /></div><small>2 PLAYERS · CONTROLLER READY</small><h2>LOCAL VERSUS</h2>
           <p>Challenge a friend with keyboard plus controller, or connect two controllers for a clean local-versus setup.</p>
           <b>SETTLE THE SCORE →</b>
         </button>
@@ -221,6 +221,7 @@ function SelectScreen(props: { mode: Mode; gamepads: ConnectedPad[]; unlocked: s
   const [activeSlot, setActiveSlot] = useState<0 | 1>(0);
   const p1 = getFighter(props.p1Id);
   const p2 = getFighter(props.p2Id);
+  const publicBase = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? "/";
   return (
     <section className="panel-screen select-screen screen-enter">
       <PanelHeading eyebrow={props.mode === "story" ? "STORY MODE" : "LOCAL VERSUS"} title={step === "fighter" ? "CHOOSE YOUR FIGHTERS" : step === "stage" ? "CHOOSE THE ARENA" : "READY YOUR CONTROLS"} onBack={props.onBack} />
@@ -245,7 +246,7 @@ function SelectScreen(props: { mode: Mode; gamepads: ConnectedPad[]; unlocked: s
       </> : step === "stage" ? <>
         <div className="stage-grid">
           {stages.map((stage) => <button key={stage.id} className={`stage-card ${props.stageId === stage.id ? "active" : ""}`} onClick={() => props.onStage(stage.id)} style={{"--sky": stage.sky, "--accent": stage.accent} as React.CSSProperties}>
-            <div className="stage-mini"><span className="mini-moon"/><i/><i/><i/><b/></div><small>{stage.place}</small><h3>{stage.name}</h3><span className="selected-label">{props.stageId === stage.id ? "SELECTED" : "SELECT"}</span>
+            <div className="stage-mini has-art" style={{backgroundImage: `linear-gradient(color-mix(in srgb, ${stage.sky} 24%, transparent), #05060a42), url('${publicBase}game/neon-rooftop-arena.png')`}}><span className="mini-moon"/><i/><i/><i/><b/></div><small>{stage.place}</small><h3>{stage.name}</h3><span className="selected-label">{props.stageId === stage.id ? "SELECTED" : "SELECT"}</span>
           </button>)}
         </div>
         <div className="stage-actions"><button className="text-button" onClick={() => setStep("fighter")}>← FIGHTERS</button><button className="cta-button fight-cta" onClick={() => setStep("controls")}>SET CONTROLS <span>→</span></button></div>
