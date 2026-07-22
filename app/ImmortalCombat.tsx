@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ThreeArena } from "./ThreeArena";
 
 type Screen = "home" | "mode" | "select" | "shop" | "fight";
 type Mode = "story" | "versus";
-type ElementName = "fire" | "water" | "lightning" | "ice" | "sand" | "wind";
+type ElementName = "fire" | "water" | "lightning" | "ice" | "sand" | "wind" | "shadow";
 
-type Fighter = {
+export type Fighter = {
   id: string;
   name: string;
   title: string;
@@ -16,9 +17,11 @@ type Fighter = {
   price: number;
   power: string;
   portrait: string;
+  portraitIndex: number;
+  exclusive?: boolean;
 };
 
-type Stage = {
+export type Stage = {
   id: string;
   name: string;
   place: string;
@@ -27,13 +30,16 @@ type Stage = {
 };
 
 const fighters: Fighter[] = [
-  { id: "raizen", name: "RAIZEN", title: "The Last Ember", element: "fire", color: "#ff4d35", glow: "#ff9c41", price: 0, power: "Inferno Orb", portrait: "炎" },
-  { id: "nyra", name: "NYRA", title: "Tide Keeper", element: "water", color: "#25a7ff", glow: "#72e6ff", price: 0, power: "Tidal Crush", portrait: "水" },
-  { id: "volt", name: "VOLT", title: "Storm Born", element: "lightning", color: "#f8d34a", glow: "#fff6a6", price: 320, power: "Sky Breaker", portrait: "雷" },
-  { id: "kael", name: "KAEL", title: "Frozen Oath", element: "ice", color: "#8ee9ff", glow: "#e9fcff", price: 450, power: "Glacier Fang", portrait: "氷" },
-  { id: "sahra", name: "SAHRA", title: "Dune Phantom", element: "sand", color: "#d8a454", glow: "#ffd991", price: 620, power: "Sand Vortex", portrait: "砂" },
-  { id: "aeri", name: "AERI", title: "Silent Gale", element: "wind", color: "#75e4b3", glow: "#d0ffe7", price: 800, power: "Cyclone Edge", portrait: "風" },
+  { id: "raizen", name: "RAIZEN", title: "The Last Ember", element: "fire", color: "#ff4d35", glow: "#ff9c41", price: 0, power: "Inferno Orb", portrait: "炎", portraitIndex: 0 },
+  { id: "nyra", name: "NYRA", title: "Tide Keeper", element: "water", color: "#25a7ff", glow: "#72e6ff", price: 0, power: "Tidal Crush", portrait: "水", portraitIndex: 1 },
+  { id: "volt", name: "VOLT", title: "Storm Born", element: "lightning", color: "#f8d34a", glow: "#fff6a6", price: 320, power: "Sky Breaker", portrait: "雷", portraitIndex: 2 },
+  { id: "kael", name: "KAEL", title: "Frozen Oath", element: "ice", color: "#8ee9ff", glow: "#e9fcff", price: 450, power: "Glacier Fang", portrait: "氷", portraitIndex: 3 },
+  { id: "sahra", name: "SAHRA", title: "Dune Phantom", element: "sand", color: "#d8a454", glow: "#ffd991", price: 620, power: "Sand Vortex", portrait: "砂", portraitIndex: 4 },
+  { id: "aeri", name: "AERI", title: "Silent Gale", element: "wind", color: "#75e4b3", glow: "#d0ffe7", price: 800, power: "Cyclone Edge", portrait: "風", portraitIndex: 5 },
+  { id: "kage", name: "KAGE", title: "The Hidden Oath", element: "shadow", color: "#8b48d7", glow: "#d090ff", price: 9999, power: "Void Rift", portrait: "影", portraitIndex: 6, exclusive: true },
 ];
+
+const storyFighters = fighters.filter((fighter) => !fighter.exclusive);
 
 const stages: Stage[] = [
   { id: "neon", name: "NEON ROOFTOP", place: "New Muscat · Midnight", sky: "#251643", accent: "#ef3b89" },
@@ -54,20 +60,27 @@ export function ImmortalCombat() {
   const [level, setLevel] = useState(1);
   const [soundOn, setSoundOn] = useState(true);
   const [toast, setToast] = useState("");
+  const [redeemed, setRedeemed] = useState<string[]>([]);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
       const savedCoins = localStorage.getItem("immortal-oh");
       const savedFighters = localStorage.getItem("immortal-fighters");
+      const savedCodes = localStorage.getItem("immortal-codes");
       if (savedCoins) setCoins(Number(savedCoins));
       if (savedFighters) setUnlocked(JSON.parse(savedFighters));
+      if (savedCodes) setRedeemed(JSON.parse(savedCodes));
     } catch { /* local progress is optional */ }
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     localStorage.setItem("immortal-oh", String(coins));
     localStorage.setItem("immortal-fighters", JSON.stringify(unlocked));
-  }, [coins, unlocked]);
+    localStorage.setItem("immortal-codes", JSON.stringify(redeemed));
+  }, [coins, unlocked, redeemed, hydrated]);
 
   const flash = (message: string) => {
     setToast(message);
@@ -77,7 +90,7 @@ export function ImmortalCombat() {
   const openSelect = (nextMode: Mode) => {
     setMode(nextMode);
     if (nextMode === "story") {
-      const opponent = fighters[(level % fighters.length)];
+      const opponent = storyFighters[(level % storyFighters.length)];
       setP2Id(opponent.id);
     }
     setScreen("select");
@@ -89,6 +102,24 @@ export function ImmortalCombat() {
     setCoins((value) => value - fighter.price);
     setUnlocked((list) => [...list, fighter.id]);
     flash(`${fighter.name} joined your crew!`);
+  };
+
+  const redeemCode = (rawCode: string) => {
+    const code = rawCode.trim().toUpperCase().replace(/\s+/g, "");
+    if (!code) return "ENTER A CODE FIRST";
+    if (redeemed.includes(code)) return "THIS CODE HAS ALREADY BEEN CLAIMED";
+    const rewards: Record<string, { coins?: number; fighter?: string; message: string }> = {
+      FIRSTALLY: { coins: 250, message: "250 OH ADDED TO YOUR VAULT" },
+      STORMHEIR: { coins: 150, fighter: "volt", message: "VOLT + 150 OH UNLOCKED" },
+      VEILBREAKER: { coins: 400, fighter: "kage", message: "EXCLUSIVE KAGE + 400 OH UNLOCKED" },
+    };
+    const reward = rewards[code];
+    if (!reward) return "CODE NOT RECOGNIZED";
+    if (reward.coins) setCoins((value) => value + reward.coins!);
+    if (reward.fighter) setUnlocked((list) => list.includes(reward.fighter!) ? list : [...list, reward.fighter!]);
+    setRedeemed((list) => [...list, code]);
+    flash(reward.message);
+    return reward.message;
   };
 
   return (
@@ -111,12 +142,12 @@ export function ImmortalCombat() {
         <SelectScreen mode={mode} unlocked={unlocked} p1Id={p1Id} p2Id={p2Id} stageId={stageId}
           onP1={setP1Id} onP2={setP2Id} onStage={setStageId} onBack={() => setScreen("mode")} onShop={() => setScreen("shop")} onFight={() => setScreen("fight")} />
       )}
-      {screen === "shop" && <ShopScreen coins={coins} unlocked={unlocked} onBuy={buy} onBack={() => setScreen("home")} />}
+      {screen === "shop" && <ShopScreen coins={coins} unlocked={unlocked} redeemed={redeemed.length} onBuy={buy} onRedeem={redeemCode} onBack={() => setScreen("home")} />}
       {screen === "fight" && (
         <FightScreen key={`${mode}-${level}-${p1Id}-${p2Id}-${stageId}`} mode={mode} level={level} p1={getFighter(p1Id)} p2={getFighter(p2Id)} stage={stages.find((stage) => stage.id === stageId) ?? stages[0]}
           onExit={() => setScreen("home")}
           onRematch={() => setScreen("select")}
-          onStoryWin={(reward) => { setCoins((value) => value + reward); setLevel((value) => value + 1); setP2Id(fighters[((level + 1) % fighters.length)].id); setScreen("select"); flash(`+${reward} OH · New friend unlocked in your story`); }} />
+          onStoryWin={(reward) => { setCoins((value) => value + reward); setUnlocked((list) => list.includes(p2Id) ? list : [...list, p2Id]); setLevel((value) => value + 1); setP2Id(storyFighters[((level + 1) % storyFighters.length)].id); setScreen("select"); flash(`+${reward} OH · ${getFighter(p2Id).name} joined your crew`); }} />
       )}
       {toast && <div className="toast" role="status">{toast}</div>}
     </main>
@@ -137,8 +168,8 @@ function HomeScreen({ onPlay, onStory, onShop }: { onPlay: () => void; onStory: 
           <button className="menu-button" onClick={onShop}><span>03</span><strong>SHOP</strong><i>→</i></button>
         </div>
       </div>
-      <div className="hero-fighter fighter-raizen" aria-hidden="true"><FighterBody fighter={fighters[0]} side="right" /></div>
-      <div className="season-card"><small>SEASON 01</small><b>THE FIRST OATH</b><span>6 fighters · 3 arenas</span></div>
+      <div className="hero-fighter fighter-raizen" aria-hidden="true"><CharacterPortrait fighter={fighters[0]} /></div>
+      <div className="season-card"><small>SEASON 01</small><b>THE FIRST OATH</b><span>7 fighters · 3 arenas · true 3D combat</span></div>
       <p className="home-hint">LOCAL KEYBOARD COMBAT · NO ACCOUNT NEEDED</p>
     </section>
   );
@@ -184,7 +215,7 @@ function SelectScreen(props: { mode: Mode; unlocked: string[]; p1Id: string; p2I
             const selected = props.p1Id === fighter.id || props.p2Id === fighter.id;
             return <button key={fighter.id} className={`roster-card ${selected ? "selected" : ""} ${locked ? "locked" : ""}`} style={{"--fighter": fighter.color} as React.CSSProperties}
               onClick={() => { if (locked) return props.onShop(); if (props.p1Id !== fighter.id) props.onP1(fighter.id); else if (props.mode === "versus") props.onP2(fighter.id); }}>
-              <span className="portrait-glyph">{locked ? "◇" : fighter.portrait}</span><strong>{fighter.name}</strong><small>{locked ? `${fighter.price} OH` : fighter.element}</small>
+              <CharacterPortrait fighter={fighter} locked={locked} /><strong>{fighter.name}</strong><small>{locked ? (fighter.exclusive ? "SECRET CODE" : `${fighter.price} OH`) : fighter.element}</small>
             </button>;
           })}
         </div>
@@ -202,18 +233,26 @@ function SelectScreen(props: { mode: Mode; unlocked: string[]; p1Id: string; p2I
   );
 }
 
-function ShopScreen({ coins, unlocked, onBuy, onBack }: { coins: number; unlocked: string[]; onBuy: (fighter: Fighter) => void; onBack: () => void }) {
+function ShopScreen({ coins, unlocked, redeemed, onBuy, onRedeem, onBack }: { coins: number; unlocked: string[]; redeemed: number; onBuy: (fighter: Fighter) => void; onRedeem: (code: string) => string; onBack: () => void }) {
+  const [code, setCode] = useState("");
+  const [codeStatus, setCodeStatus] = useState("Codes can be found in story secrets, events, and community drops.");
+  const submitCode = (event: React.FormEvent) => { event.preventDefault(); const result = onRedeem(code); setCodeStatus(result); if (!result.includes("NOT") && !result.includes("ALREADY") && !result.includes("ENTER")) setCode(""); };
   return (
     <section className="panel-screen shop-screen screen-enter">
       <PanelHeading eyebrow="THE UNDERGROUND MARKET" title="RECRUIT YOUR CREW" onBack={onBack} />
       <div className="shop-banner"><div><small>YOUR BALANCE</small><strong><span className="oh-coin large">OH</span>{coins.toLocaleString()}</strong></div><p>Win story fights to earn OH. New fighters bring unique elemental powers into local versus.</p></div>
+      <form className="code-vault" onSubmit={submitCode}>
+        <div className="code-vault-title"><span>⌁</span><div><small>CLASSIFIED ACCESS</small><h2>SECRET CODE VAULT</h2></div></div>
+        <label><span>ENTER ACCESS CODE</span><div><input value={code} onChange={(event) => setCode(event.target.value)} placeholder="••••••••••" autoComplete="off" spellCheck={false} aria-describedby="code-status" /><button type="submit">REDEEM CODE →</button></div></label>
+        <p id="code-status" aria-live="polite">{codeStatus} <b>{redeemed} claimed</b></p>
+      </form>
       <div className="shop-grid">
         {fighters.map((fighter) => {
           const owned = unlocked.includes(fighter.id);
           return <article className={`shop-card ${owned ? "owned" : ""}`} key={fighter.id} style={{"--fighter": fighter.color, "--glow": fighter.glow} as React.CSSProperties}>
-            <div className="shop-portrait"><span>{fighter.portrait}</span><FighterBody fighter={fighter} side="right" /></div>
+            <div className="shop-portrait"><span className="shop-glyph">{fighter.portrait}</span><CharacterPortrait fighter={fighter} locked={!owned} /></div>
             <div className="shop-info"><small>{fighter.title}</small><h2>{fighter.name}</h2><p><b>{fighter.element.toUpperCase()}</b> · {fighter.power}</p></div>
-            <button disabled={owned} onClick={() => onBuy(fighter)}>{owned ? "RECRUITED ✓" : <><span className="oh-coin small">OH</span>{fighter.price}</>}</button>
+            <button disabled={owned || fighter.exclusive} onClick={() => onBuy(fighter)}>{owned ? "RECRUITED ✓" : fighter.exclusive ? "CODE EXCLUSIVE" : <><span className="oh-coin small">OH</span>{fighter.price}</>}</button>
           </article>;
         })}
       </div>
@@ -232,6 +271,7 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
   const [roundText, setRoundText] = useState("FIGHT");
   const [winner, setWinner] = useState<0 | 1 | null>(null);
   const [paused, setPaused] = useState(false);
+  const [action, setAction] = useState<{ side: 0 | 1; kind: "strike" | "power"; stamp: number } | null>(null);
   const cooldown = useRef<[number, number]>([0, 0]);
   const healthRef = useRef(health);
   const positionsRef = useRef(positions);
@@ -266,10 +306,12 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
       if (meter[side] < 40) return;
       setMeter((current) => { const next: [number, number] = [...current]; next[side] -= 40; return next; });
       setEffect({ side, type: side === 0 ? p1.element : p2.element });
+      setAction({ side, kind: "power", stamp: now });
       cooldown.current[side] = now + 900;
       window.setTimeout(() => { damage(side, 18, true); setEffect(null); }, 360);
     } else {
       cooldown.current[side] = now + 380;
+      setAction({ side, kind: "strike", stamp: now });
       damage(side, 9 + (mode === "story" && side === 1 ? Math.min(7, level) : 0));
     }
   }, [damage, level, meter, mode, p1.element, p2.element, winner]);
@@ -320,16 +362,14 @@ function FightScreen({ mode, level, p1, p2, stage, onExit, onRematch, onStoryWin
   return (
     <section className={`fight-screen ${hitSide !== null ? "impact" : ""}`} style={{"--sky": stage.sky, "--stage-accent": stage.accent} as React.CSSProperties}>
       <ArenaBackground stage={stage} />
+      <ThreeArena stage={stage} fighters={[p1, p2]} positions={positions} jumping={jumping} blocking={blocking} hitSide={hitSide} action={action} />
+      <div className="cinema-bars" aria-hidden="true"><span/><span/></div>
       <div className="fight-hud">
         <HealthBar fighter={p1} value={health[0]} meter={meter[0]} side="left" />
         <div className="round-badge"><small>{mode === "story" ? `LEVEL ${level}` : "VERSUS"}</small><b>∞</b><span>ROUND 1</span></div>
         <HealthBar fighter={p2} value={health[1]} meter={meter[1]} side="right" />
       </div>
       <button className="pause-button" onClick={() => setPaused(true)}>Ⅱ</button>
-      <div className="arena-floor"><div className="floor-ring"/></div>
-      {[p1, p2].map((fighter, index) => <div key={index} className={`combatant combatant-${index} ${jumping[index] ? "jumping" : ""} ${blocking[index] ? "blocking" : ""} ${hitSide === index ? "hit" : ""}`} style={{left: `${positions[index]}%`, "--fighter": fighter.color, "--glow": fighter.glow} as React.CSSProperties}>
-        <FighterBody fighter={fighter} side={index === 0 ? "right" : "left"} /><span className="fighter-shadow"/><span className="player-tag">{index === 0 ? "P1" : (mode === "story" ? "AI" : "P2")}</span>
-      </div>)}
       {effect && <PowerEffect effect={effect} from={positions[effect.side]} to={positions[effect.side === 0 ? 1 : 0]} />}
       {roundText && <div className="fight-callout">{roundText}</div>}
       <div className="fight-controls"><span><kbd>A</kbd><kbd>D</kbd> MOVE · <kbd>W</kbd> JUMP · <kbd>S</kbd> BLOCK · <kbd>F</kbd> STRIKE · <kbd>G</kbd> POWER</span>{mode === "versus" && <span><kbd>←</kbd><kbd>→</kbd> MOVE · <kbd>↑</kbd> JUMP · <kbd>↓</kbd> BLOCK · <kbd>K</kbd> STRIKE · <kbd>L</kbd> POWER</span>}</div>
@@ -344,13 +384,17 @@ function DynamicCity() { return <div className="dynamic-city" aria-hidden="true"
 
 function ArenaBackground({ stage }: { stage: Stage }) { return <div className={`arena-bg arena-${stage.id}`} aria-hidden="true"><div className="arena-moon"/><div className="wind-cloud one"/><div className="wind-cloud two"/><div className="arena-buildings">{Array.from({length: 12}, (_, i) => <i key={i}/>)}</div><div className="crowd">{Array.from({length: 26}, (_, i) => <span key={i} style={{animationDelay: `${(i % 7) * -.13}s`}}/> )}</div><div className="tree left"><b/><i/><i/><i/></div><div className="tree right"><b/><i/><i/><i/></div><div className="stage-sign">{stage.name}<small>{stage.place}</small></div></div>; }
 
-function FighterBody({ fighter, side }: { fighter: Fighter; side: "left" | "right" }) { return <div className={`fighter-body facing-${side}`} style={{"--fighter": fighter.color, "--glow": fighter.glow} as React.CSSProperties}><span className="body-aura"/><div className="fighter-head"><i/></div><div className="fighter-torso"><b>{fighter.portrait}</b></div><div className="arm arm-left"/><div className="arm arm-right"><i/></div><div className="leg leg-left"/><div className="leg leg-right"/><span className={`element-orb ${fighter.element}`}/></div>; }
+function CharacterPortrait({ fighter, locked = false }: { fighter: Fighter; locked?: boolean }) {
+  const col = fighter.portraitIndex % 4;
+  const row = Math.floor(fighter.portraitIndex / 4);
+  return <span className={`character-portrait ${locked ? "portrait-locked" : ""}`} role="img" aria-label={`${fighter.name}, ${fighter.title}`} style={{ backgroundPosition: `${col * 33.333}% ${row * 100}%` }}><i>{locked ? "◇" : ""}</i></span>;
+}
 
 function PowerEffect({ effect, from, to }: { effect: {side: 0 | 1; type: ElementName}; from: number; to: number }) { return <div className={`power-effect power-${effect.type}`} style={{left: `${from + (to - from) * .45}%`} as React.CSSProperties}><span>{effect.type === "lightning" ? "ϟ" : effect.type === "ice" ? "✦" : effect.type === "wind" ? "〰" : "●"}</span><i/><b/></div>; }
 
-function HealthBar({ fighter, value, meter, side }: { fighter: Fighter; value: number; meter: number; side: "left" | "right" }) { return <div className={`health-block ${side}`}><div className="fighter-hud"><span style={{background: fighter.color}}>{fighter.portrait}</span><div><small>{side === "left" ? "PLAYER ONE" : "CHALLENGER"}</small><strong>{fighter.name}</strong></div></div><div className="health-track"><i style={{width: `${value}%`, background: fighter.color}}/></div><div className="power-track"><i style={{width: `${meter}%`, background: fighter.glow}}/></div></div>; }
+function HealthBar({ fighter, value, meter, side }: { fighter: Fighter; value: number; meter: number; side: "left" | "right" }) { return <div className={`health-block ${side}`}><div className="fighter-hud"><CharacterPortrait fighter={fighter}/><div><small>{side === "left" ? "PLAYER ONE" : "CHALLENGER"}</small><strong>{fighter.name}</strong></div></div><div className="health-track"><i style={{width: `${value}%`, background: fighter.color}}/></div><div className="power-track"><i style={{width: `${meter}%`, background: fighter.glow}}/></div></div>; }
 
-function SelectedFighter({ fighter, label, align }: { fighter: Fighter; label: string; align: "left" | "right" }) { return <div className={`selected-fighter ${align}`} style={{"--fighter": fighter.color, "--glow": fighter.glow} as React.CSSProperties}><div className="selected-body"><FighterBody fighter={fighter} side={align === "left" ? "right" : "left"}/></div><div className="selected-copy"><small>{label} · {fighter.element}</small><h2>{fighter.name}</h2><p>{fighter.title}</p><span>{fighter.power}</span></div></div>; }
+function SelectedFighter({ fighter, label, align }: { fighter: Fighter; label: string; align: "left" | "right" }) { return <div className={`selected-fighter ${align}`} style={{"--fighter": fighter.color, "--glow": fighter.glow} as React.CSSProperties}><div className="selected-body"><CharacterPortrait fighter={fighter}/></div><div className="selected-copy"><small>{label} · {fighter.element}</small><h2>{fighter.name}</h2><p>{fighter.title}</p><span>{fighter.power}</span></div></div>; }
 
 function PanelHeading({ eyebrow, title, onBack }: { eyebrow: string; title: string; onBack: () => void }) { return <div className="panel-heading"><button className="back-button" onClick={onBack}>← <span>BACK</span></button><div><small>{eyebrow}</small><h1>{title}</h1></div><span className="heading-rule"/></div>; }
 
