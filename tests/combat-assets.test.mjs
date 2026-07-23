@@ -81,11 +81,12 @@ test("social title art matches its declared 1200x630 share ratio", async () => {
   assert.equal(png.readUInt32BE(20), 630);
 });
 
-test("arena audio lifetime is owned by the effect that closes it", async () => {
+test("arena audio is delegated to the shared autoplay-safe audio system", async () => {
   const source = await readFile("app/PhaserArena.tsx", "utf8");
-  const audioDeclaration = source.indexOf("let audioContext: AudioContext | null = null;");
-  const bootDeclaration = source.indexOf("const boot = async () =>");
-  const cleanup = source.indexOf("audioContext?.close()");
-  assert.ok(audioDeclaration > -1 && audioDeclaration < bootDeclaration, "audio context must outlive the async boot scope");
-  assert.ok(cleanup > bootDeclaration, "the effect cleanup closes its owned audio context");
+  const audioSource = await readFile("app/audio-system.ts", "utf8");
+  assert.match(source, /audioSystem\.playSfx/, "combat routes sounds through the shared system");
+  assert.doesNotMatch(source, /new window\.AudioContext/, "the arena cannot create a competing audio context");
+  assert.match(audioSource, /async unlock\(\)/, "audio starts only after an input gesture");
+  assert.match(audioSource, /scheduleMenuBeat/, "menu music is present");
+  assert.match(audioSource, /scheduleFightBeat/, "fight music is present");
 });

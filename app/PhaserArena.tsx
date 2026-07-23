@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import type { Fighter, Stage } from "./ImmortalCombat";
-import { FightingEngine, MOVES, type CombatSnapshot, type InputFrame } from "./fighting-engine";
+import { audioSystem } from "./audio-system";
+import { FightingEngine, MOVES, type CombatAction, type CombatSnapshot, type InputFrame } from "./fighting-engine";
 import { sampleMotion } from "./combat-animation";
 
 type Props = {
@@ -41,9 +42,9 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
+    audioSystem.setEnabled(soundOn);
     let destroyed = false;
     let game: import("phaser").Game | undefined;
-    let audioContext: AudioContext | null = null;
 
     const boot = async () => {
       const Phaser = (await import("phaser")).default;
@@ -64,26 +65,13 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
       let debugLabel: import("phaser").GameObjects.Text;
       let debugVisible = false;
       let gamepadPausePressed = false;
-      const wakeAudio = () => {
-        if (!soundOn) return;
-        audioContext ??= new window.AudioContext();
-        if (audioContext.state === "suspended") void audioContext.resume();
-      };
-      const playImpact = (special: boolean, blocked: boolean) => {
-        if (!soundOn) return;
-        wakeAudio();
-        if (!audioContext) return;
-        const now = audioContext.currentTime;
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        oscillator.type = special ? "sawtooth" : blocked ? "triangle" : "square";
-        oscillator.frequency.setValueAtTime(special ? 180 : blocked ? 105 : 76, now);
-        oscillator.frequency.exponentialRampToValueAtTime(special ? 48 : 34, now + (special ? .22 : .09));
-        gain.gain.setValueAtTime(special ? .085 : .055, now);
-        gain.gain.exponentialRampToValueAtTime(.0001, now + (special ? .24 : .1));
-        oscillator.connect(gain).connect(audioContext.destination);
-        oscillator.start(now);
-        oscillator.stop(now + (special ? .25 : .11));
+      const lastWhooshFrame = [-1, -1];
+      const wakeAudio = () => void audioSystem.unlock();
+      const playImpact = (action: CombatAction, blocked: boolean) => {
+        if (blocked) audioSystem.playSfx("block");
+        else if (action === "special") audioSystem.playSfx("power");
+        else if (action === "kick") audioSystem.playSfx("kick");
+        else audioSystem.playSfx("punch");
       };
 
       class CombatScene extends Phaser.Scene {
@@ -129,8 +117,8 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
             this.add.sprite(910, 626, visuals[1].texture, visuals[1].row).setOrigin(.5, .96).setScale(visuals[1].scale).setFlipX(true).setDepth(10),
           ];
           const keyboard = this.input.keyboard!;
-          keyboard.addCapture(["LEFT", "RIGHT", "DOWN", "SPACE", "D", "F", "G", "H", "R", "ESC", "BACKTICK"]);
-          keys = keyboard.addKeys({ left: "LEFT", right: "RIGHT", down: "DOWN", jump: "SPACE", block: "D", light: "F", heavy: "G", kick: "H", special: "R", pause: "ESC", debug: "BACKTICK" }) as Record<string, import("phaser").Input.Keyboard.Key>;
+          keyboard.addCapture(["LEFT", "RIGHT", "UP", "DOWN", "A", "S", "D", "F", "R", "ESC", "BACKTICK"]);
+          keys = keyboard.addKeys({ left: "LEFT", right: "RIGHT", down: "DOWN", jump: "UP", block: "A", light: "S", heavy: "D", kick: "F", special: "R", pause: "ESC", debug: "BACKTICK" }) as Record<string, import("phaser").Input.Keyboard.Key>;
           keyboard.on("keydown", wakeAudio);
           keys.pause.on("down", () => callbacks.current.onPause());
           keys.debug.on("down", () => { debugVisible = !debugVisible; debugGraphics.setVisible(debugVisible); debugLabel.setVisible(debugVisible); });
@@ -166,6 +154,16 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
           snapshot.fighters.forEach((fighter, side) => {
             const sprite = sprites[side];
             const visual = visuals[side];
+            if (
+              (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "kick" || fighter.state === "special")
+              && fighter.stateFrame <= 2
+            ) {
+              const actionStart = snapshot.frame - fighter.stateFrame;
+              if (lastWhooshFrame[side] !== actionStart) {
+                lastWhooshFrame[side] = actionStart;
+                audioSystem.playSfx(fighter.state === "special" ? "power" : "whoosh");
+              }
+            }
             const rowOffset = fighter.state === "special" && visual.awakenedRow !== undefined ? visual.awakenedRow : visual.row;
             const motion = sampleMotion(fighter.state, fighter.stateFrame, this.time.now, side as 0 | 1);
             const airborne = fighter.y > 1;
@@ -203,7 +201,7 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
           }
           if (snapshot.hit && snapshot.hit.stamp !== lastHitStamp) {
             lastHitStamp = snapshot.hit.stamp;
-            playImpact(snapshot.hit.action === "special", snapshot.hit.blocked);
+            playImpact(snapshot.hit.action, snapshot.hit.blocked);
             this.cameras.main.shake(snapshot.hit.blocked ? 55 : 95, snapshot.hit.action === "special" ? .012 : .006);
             const target = snapshot.fighters[snapshot.hit.attacker === 0 ? 1 : 0];
             const burst = this.add.circle(target.x, 440 - target.y, snapshot.hit.action === "special" ? 58 : 28, parseInt(fighters[snapshot.hit.attacker].glow.slice(1), 16), .85);
@@ -216,7 +214,7 @@ export function PhaserArena({ mode, level, fighters, stage, soundOn, paused, onS
       game = new Phaser.Game({ type: Phaser.AUTO, parent: mount, width: 1280, height: 720, backgroundColor: "#08090d", render: { antialias: true, pixelArt: false }, scale: { mode: Phaser.Scale.NONE }, scene: CombatScene });
     };
     void boot();
-    return () => { destroyed = true; game?.destroy(true); void audioContext?.close(); };
+    return () => { destroyed = true; game?.destroy(true); };
   // A new match owns a fresh Phaser runtime.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, level, fighters[0].id, fighters[1].id, stage.id, soundOn]);

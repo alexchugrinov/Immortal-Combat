@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PhaserArena } from "./PhaserArena";
+import { audioSystem } from "./audio-system";
 import type { CombatSnapshot } from "./fighting-engine";
 
 type Screen = "home" | "mode" | "select" | "shop" | "fight";
@@ -103,6 +104,25 @@ export function ImmortalCombat() {
     return () => { window.removeEventListener("gamepadconnected", refreshGamepads); window.removeEventListener("gamepaddisconnected", refreshGamepads); window.clearInterval(poller); };
   }, []);
 
+  useEffect(() => {
+    audioSystem.setEnabled(soundOn);
+    audioSystem.setScene(screen === "fight" ? "fight" : "menu");
+  }, [screen, soundOn]);
+
+  useEffect(() => {
+    const unlockAudio = (event: PointerEvent | KeyboardEvent) => {
+      void audioSystem.unlock();
+      const target = event.target;
+      if (target instanceof Element && target.closest("button")) audioSystem.playSfx("ui");
+    };
+    document.addEventListener("pointerdown", unlockAudio);
+    document.addEventListener("keydown", unlockAudio);
+    return () => {
+      document.removeEventListener("pointerdown", unlockAudio);
+      document.removeEventListener("keydown", unlockAudio);
+    };
+  }, []);
+
   const flash = (message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(""), 1800);
@@ -153,7 +173,12 @@ export function ImmortalCombat() {
         </button>
         <div className="top-actions">
           <div className="currency"><span className="oh-coin">OH</span><strong>{coins.toLocaleString()}</strong></div>
-          <button className="icon-button" onClick={() => setSoundOn((value) => !value)} aria-label={soundOn ? "Mute combat sound" : "Enable combat sound"} aria-pressed={soundOn}>{soundOn ? "♪" : "×"}</button>
+          <button className="icon-button" onClick={() => setSoundOn((value) => {
+            const enabled = !value;
+            audioSystem.setEnabled(enabled);
+            if (enabled) void audioSystem.unlock();
+            return enabled;
+          })} aria-label={soundOn ? "Mute music and sound" : "Enable music and sound"} title={soundOn ? "Music and sound on" : "Music and sound muted"} aria-pressed={soundOn}>{soundOn ? "♪" : "×"}</button>
         </div>
       </header>}
 
@@ -191,7 +216,7 @@ function HomeScreen({ onPlay, onStory, onShop }: { onPlay: () => void; onStory: 
         </div>
       </div>
       <div className="season-card"><small>PROTOTYPE CHAPTER I</small><b>THE FIRST OATH</b><span>7 fighters · 3 arenas · best of three</span></div>
-      <p className="home-hint"><b>KEYBOARD</b> ARROWS MOVE · SPACE JUMP · F / G / H ATTACK · R POWER</p>
+      <p className="home-hint"><b>KEYBOARD</b> ARROWS MOVE / JUMP · A BLOCK · S / D / F HIT · R POWER</p>
     </section>
   );
 }
@@ -277,12 +302,12 @@ function ControlSetup({ mode, gamepads, onBack, onFight }: { mode: Mode; gamepad
       <div className={`connection-pill ${gamepads.length ? "online" : ""}`}><i /> {gamepads.length} CONNECTED</div>
     </div>
     <div className="device-grid">
-      <article className="device-card p1-device"><small>PLAYER 1</small><div className="device-icon">{p1Device.includes("Keyboard") ? "⌨" : "⊕"}</div><h3>{p1Device}</h3><p>{p1Device.includes("Keyboard") ? "Arrows move · Space jumps · D blocks · F/G/H attack" : "Controller assigned automatically"}</p></article>
+      <article className="device-card p1-device"><small>PLAYER 1</small><div className="device-icon">{p1Device.includes("Keyboard") ? "⌨" : "⊕"}</div><h3>{p1Device}</h3><p>{p1Device.includes("Keyboard") ? "Arrows move and jump · A blocks · S/D/F hit" : "Controller assigned automatically"}</p></article>
       <div className="device-vs">VS</div>
       <article className="device-card p2-device"><small>{mode === "story" ? "RIVAL" : "PLAYER 2"}</small><div className="device-icon">{mode === "story" ? "AI" : "⊕"}</div><h3>{p2Device}</h3><p>{mode === "story" ? "Adaptive story-mode opponent" : gamepads.length ? "Controller assigned automatically" : "Connect one gamepad for Player 2"}</p></article>
     </div>
     {gamepads.length > 0 && <div className="pad-map" aria-label="Controller button map"><span><kbd>LS</kbd><b>MOVE</b></span><span><kbd>A/✕</kbd><b>JUMP</b></span><span><kbd>LB/L1</kbd><b>BLOCK</b></span><span><kbd>RT/R2</kbd><b>KICK</b></span><span><kbd>X/□</kbd><b>LIGHT</b></span><span><kbd>Y/△</kbd><b>HEAVY</b></span><span><kbd>B/○</kbd><b>POWER</b></span></div>}
-    {!gamepads.length && <p className="controller-warning"><b>{mode === "story" ? "KEYBOARD READY." : "PLAYER 2 NEEDS A CONTROLLER."}</b> {mode === "story" ? "Use arrows, Space, D, F, G, H and R." : "Connect any browser-compatible gamepad, then press a button."}</p>}
+    {!gamepads.length && <p className="controller-warning"><b>{mode === "story" ? "KEYBOARD READY." : "PLAYER 2 NEEDS A CONTROLLER."}</b> {mode === "story" ? "Use arrows, A, S, D, F and R." : "Connect any browser-compatible gamepad, then press a button."}</p>}
     <div className="stage-actions"><button className="text-button" onClick={onBack}>← ARENA</button><button className="cta-button fight-cta" disabled={mode === "versus" && !gamepads.length} onClick={onFight}>ENTER COMBAT <span>⚔</span></button></div>
   </div>;
 }
@@ -397,5 +422,5 @@ function PanelHeading({ eyebrow, title, onBack }: { eyebrow: string; title: stri
 
 function FightControlLegend({ player, controller }: { player: "P1" | "P2"; controller: boolean }) {
   if (controller) return <span className="controller-legend"><b>{player}</b> <kbd>LS</kbd> MOVE · <kbd>A/✕</kbd> JUMP · <kbd>LB</kbd> BLOCK · <kbd>X/□</kbd> LIGHT · <kbd>Y/△</kbd> HEAVY · <kbd>RT</kbd> KICK · <kbd>B/○</kbd> POWER</span>;
-  return <span><b>P1</b> <kbd>← ↓ →</kbd> MOVE/CROUCH · <kbd>SPACE</kbd> JUMP · <kbd>D</kbd> BLOCK · <kbd>F</kbd> LIGHT · <kbd>G</kbd> HEAVY · <kbd>H</kbd> KICK · <kbd>R</kbd> POWER</span>;
+  return <span><b>P1</b> <kbd>← ↓ →</kbd> MOVE/CROUCH · <kbd>↑</kbd> JUMP · <kbd>A</kbd> BLOCK · <kbd>S</kbd> LIGHT · <kbd>D</kbd> HEAVY · <kbd>F</kbd> KICK · <kbd>R</kbd> POWER</span>;
 }
